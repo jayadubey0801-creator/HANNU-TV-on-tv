@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math';
 import 'dart:io'; 
@@ -12,7 +13,7 @@ class SkippableAdScreen extends StatefulWidget {
   const SkippableAdScreen({
     Key? key, 
     required this.nextScreen,
-    this.adDuration = 10, // 🚀 FIXED TO 10 SECONDS FOR MOVIES (Live TV dynamically overrides this)
+    this.adDuration = 10, 
   }) : super(key: key);
 
   @override
@@ -25,10 +26,7 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
   bool _canSkip = false;
   Timer? _timer;
 
-  // 🔥 DEEP LOGIC: ANTI-ADBLOCK FLAG 🔥
   bool _isAdblockDetected = false;
-
-  // 🛡️ STRICT 1 SECOND TAP VALIDATION
   Offset? _tapDownPos;
   DateTime? _lastTapTime;
   bool get _userTappedRecently =>
@@ -49,7 +47,6 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
     final _random = Random();
     String selectedAd = _fullScreenAdLinks[_random.nextInt(_fullScreenAdLinks.length)];
 
-    // 🚀 TRAP 1: APP START HOTE HI SMART DUAL-DNS CHECK KAREGA 🚀
     _checkAdGuardDNS(selectedAd);
 
     _controller = WebViewController()
@@ -58,7 +55,6 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (String url) {
-            // 🔥 JS INJECTION: CAPTCHA KILLER & JS POPUP KILLER 🔥
             _controller.runJavaScript('''
               window.open = function() { return null; };
               try { Object.defineProperty(window, 'top', { value: window, writable: false }); } catch(e) {}
@@ -71,7 +67,6 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url.toLowerCase();
             
-            // 🔥 AGGRESSIVE ANTI-REDIRECT: PLAY STORE AUR INTENTS KO PAKDEGA 🔥
             if (url.startsWith('intent://') || 
                 url.startsWith('market://') || 
                 url.contains('play.google.com') ||
@@ -86,7 +81,6 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
           },
           onWebResourceError: (WebResourceError error) {
             final desc = error.description.toLowerCase();
-            // 🔥 Sirf AdBlocker confirm hone par rokenge, slow internet par nahi 🔥
             if (desc.contains('err_blocked_by_client')) {
               _triggerBlock();
             }
@@ -105,7 +99,6 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
     });
   }
 
-  // 🔥 DUAL-CHECK SMART DNS LOGIC 🔥
   Future<void> _checkAdGuardDNS(String adUrl) async {
     try {
       final uri = Uri.parse(adUrl);
@@ -121,16 +114,12 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
         _triggerBlock(); 
       }
     } catch (e) {
-      // DNS resolve fail hua, Google ping karke dekho internet chal raha hai ya nahi
       try {
         final googleCheck = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
         if (googleCheck.isNotEmpty) {
-          // Internet ekdum theek hai, par ad block ho gaya = AdBlocker!
           _triggerBlock();
         }
-      } catch (e2) {
-        // Internet band/slow hai, isko adblock mat maano
-      }
+      } catch (e2) {}
     }
   }
 
@@ -213,35 +202,55 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
               Positioned(
                 top: 15,
                 right: 15,
-                child: GestureDetector(
-                  onTap: (_canSkip && !_isAdblockDetected) ? _skipAd : null,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: (_canSkip && !_isAdblockDetected) ? Colors.white : Colors.black.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: (_canSkip && !_isAdblockDetected) ? Colors.white : Colors.grey),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _isAdblockDetected 
-                              ? "Loading..." 
-                              : (_canSkip ? "Skip Ad" : "Skip in $_timeLeft"),
-                          style: TextStyle(
-                            color: (_canSkip && !_isAdblockDetected) ? Colors.black : Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                // 🔥 DEEP FIX: "SKIP AD" REMOTE D-PAD FIX 🔥
+                child: StatefulBuilder(
+                  builder: (context, setStateFocus) {
+                    bool isFocused = false;
+                    return Focus(
+                      autofocus: true, // Ad aate hi focus directly ispe aayega
+                      onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                      onKeyEvent: (node, event) {
+                         if(event is KeyDownEvent && (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter)) {
+                            if (_canSkip && !_isAdblockDetected) _skipAd();
+                            return KeyEventResult.handled;
+                         }
+                         return KeyEventResult.ignored;
+                      },
+                      child: GestureDetector(
+                        onTap: (_canSkip && !_isAdblockDetected) ? _skipAd : null,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: (_canSkip && !_isAdblockDetected) ? Colors.white : Colors.black.withOpacity(0.8),
+                            borderRadius: BorderRadius.circular(30),
+                            // White border aur glow chamkega jab remote se button par aaoge
+                            border: Border.all(color: isFocused ? Colors.redAccent : ((_canSkip && !_isAdblockDetected) ? Colors.white : Colors.grey), width: isFocused ? 3 : 1),
+                            boxShadow: isFocused ? [const BoxShadow(color: Colors.redAccent, blurRadius: 15, spreadRadius: 2)] : [],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _isAdblockDetected 
+                                    ? "Loading..." 
+                                    : (_canSkip ? "Skip Ad" : "Skip in $_timeLeft"),
+                                style: TextStyle(
+                                  color: (_canSkip && !_isAdblockDetected) ? Colors.black : Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              if (_canSkip && !_isAdblockDetected) ...[
+                                const SizedBox(width: 8),
+                                const Icon(Icons.skip_next, color: Colors.black, size: 20),
+                              ]
+                            ],
                           ),
                         ),
-                        if (_canSkip && !_isAdblockDetected) ...[
-                          const SizedBox(width: 8),
-                          const Icon(Icons.skip_next, color: Colors.black, size: 20),
-                        ]
-                      ],
-                    ),
-                  ),
+                      ),
+                    );
+                  }
                 ),
               ),
 

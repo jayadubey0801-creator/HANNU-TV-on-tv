@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -132,7 +133,6 @@ class RankNumber extends StatelessWidget {
   }
 }
 
-// 🔥 DEEP FOCUS LOGIC ADDED HERE (For Bright White Glow & Auto-Scroll) 🔥
 class PosterCard extends StatelessWidget {
   const PosterCard({
     super.key,
@@ -161,10 +161,7 @@ class PosterCard extends StatelessWidget {
         return Focus(
           onFocusChange: (focused) {
             setStateFocus(() => isFocused = focused);
-            // Jab TV remote ka button niche dabega tab page auto scroll hoga us movie ke focus me
-            if (focused) {
-               Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
-            }
+            if (focused) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
           },
           child: InkWell(
             onTap: onTap ?? () => Hooks.open(context, item),
@@ -177,7 +174,6 @@ class PosterCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  // 🔥 PERFECT WHITE BORDER AND GLOW 🔥
                   border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: isFocused ? 3.0 : 0),
                   boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 3)] : [],
                 ),
@@ -555,6 +551,7 @@ const String kDashAdsterraSnippet = '''
 <script type="text/javascript" src="https://www.highrevenueformat.com/a39df283f6ad10c34e229e5715bceff5/invoke.js"></script>
 ''';
 
+// 🔥 DEEP FIX: BANNERS PAR REMOTE FOCUS 🔥
 class AdSlot extends StatelessWidget {
   const AdSlot({super.key});
 
@@ -566,19 +563,34 @@ class AdSlot extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 18),
       child: Center(
-        child: Container(
-          height: 62,
-          width: 330, 
-          alignment: Alignment.center,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: HC.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white10),
-          ),
-          child: b != null
-              ? b(context)
-              : const CustomBannerAd(htmlBannerCode: kDashAdsterraSnippet),
+        child: StatefulBuilder(
+          builder: (context, setStateFocus) {
+            bool isFocused = false;
+            return Focus(
+              onFocusChange: (focused) {
+                setStateFocus(() => isFocused = focused);
+              },
+              child: AnimatedScale(
+                scale: isFocused ? 1.05 : 1.0,
+                duration: const Duration(milliseconds: 150),
+                child: Container(
+                  height: 62,
+                  width: 330, 
+                  alignment: Alignment.center,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: HC.surface,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: isFocused ? Colors.white : Colors.white10, width: isFocused ? 3 : 1),
+                    boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 3)] : [],
+                  ),
+                  child: b != null
+                      ? b(context)
+                      : const CustomBannerAd(htmlBannerCode: kDashAdsterraSnippet),
+                ),
+              ),
+            );
+          }
         ),
       ),
     );
@@ -739,70 +751,125 @@ class _TitleSheet extends StatelessWidget {
                   const SizedBox(height: 18),
                   Row(
                     children: <Widget>[
+                      // 🔥 DEEP FIX: "Watch Now" D-Pad Selection Fix 🔥
                       Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).pop(); 
-                            Navigator.push(
-                              outer,
-                              MaterialPageRoute(
-                                builder: (_) => SkippableAdScreen(
-                                  adDuration: 10,
-                                  nextScreen: VideoPlayerPage(
-                                    tmdbId: item.id,
-                                    mediaType: item.isTv ? 'tv' : 'movie',
-                                    movieTitle: item.title,
-                                    overview: item.overview,
-                                    rating: item.rating.toStringAsFixed(1),
-                                    year: item.year,
+                        child: StatefulBuilder(
+                          builder: (context, setStateFocus) {
+                            bool isFocused = false;
+                            return Focus(
+                              autofocus: true, // Title sheet khulte hi yahan focus hoga
+                              onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                              onKeyEvent: (node, event) {
+                                 if(event is KeyDownEvent && (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter)) {
+                                    Navigator.of(context).pop(); 
+                                    Navigator.push(
+                                      outer,
+                                      MaterialPageRoute(
+                                        builder: (_) => SkippableAdScreen(
+                                          adDuration: 10,
+                                          nextScreen: VideoPlayerPage(
+                                            tmdbId: item.id,
+                                            mediaType: item.isTv ? 'tv' : 'movie',
+                                            movieTitle: item.title,
+                                            overview: item.overview,
+                                            rating: item.rating.toStringAsFixed(1),
+                                            year: item.year,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    return KeyEventResult.handled;
+                                 }
+                                 return KeyEventResult.ignored;
+                              },
+                              child: GestureDetector(
+                                onTap: () {
+                                  Navigator.of(context).pop(); 
+                                  Navigator.push(
+                                    outer,
+                                    MaterialPageRoute(
+                                      builder: (_) => SkippableAdScreen(
+                                        adDuration: 10,
+                                        nextScreen: VideoPlayerPage(
+                                          tmdbId: item.id,
+                                          mediaType: item.isTv ? 'tv' : 'movie',
+                                          movieTitle: item.title,
+                                          overview: item.overview,
+                                          rating: item.rating.toStringAsFixed(1),
+                                          year: item.year,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 150),
+                                  height: 48,
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    gradient: HC.primary,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: isFocused ? 3 : 0),
+                                    boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 2)] : [],
+                                  ),
+                                  child: const Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: <Widget>[
+                                      Icon(Icons.play_arrow_rounded, color: Colors.white),
+                                      SizedBox(width: 6),
+                                      Text('Watch Now',
+                                          style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
+                                    ],
                                   ),
                                 ),
                               ),
                             );
-                          },
-                          child: Container(
-                            height: 48,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              gradient: HC.primary,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            child: const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: <Widget>[
-                                Icon(Icons.play_arrow_rounded, color: Colors.white),
-                                SizedBox(width: 6),
-                                Text('Watch Now',
-                                    style: TextStyle(fontWeight: FontWeight.w800, color: Colors.white)),
-                              ],
-                            ),
-                          ),
+                          }
                         ),
                       ),
                       const SizedBox(width: 12),
+                      
+                      // 🔥 DEEP FIX: "My List" D-Pad Selection Fix 🔥
                       AnimatedBuilder(
                         animation: WatchlistStore.I,
                         builder: (BuildContext _, Widget? __) {
                           final bool on = WatchlistStore.I.contains(item);
-                          return GestureDetector(
-                            onTap: () => WatchlistStore.I.toggle(item),
-                            child: Container(
-                              height: 48,
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: on ? HC.accent2 : Colors.white24),
-                              ),
-                              child: Row(
-                                children: <Widget>[
-                                  Icon(on ? Icons.check_rounded : Icons.add_rounded, color: Colors.white),
-                                  const SizedBox(width: 6),
-                                  const Text('My List',
-                                      style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
-                                ],
-                              ),
-                            ),
+                          return StatefulBuilder(
+                            builder: (context, setStateFocus) {
+                              bool isFocused = false;
+                              return Focus(
+                                onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                                onKeyEvent: (node, event) {
+                                   if(event is KeyDownEvent && (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter)) {
+                                      WatchlistStore.I.toggle(item);
+                                      return KeyEventResult.handled;
+                                   }
+                                   return KeyEventResult.ignored;
+                                },
+                                child: GestureDetector(
+                                  onTap: () => WatchlistStore.I.toggle(item),
+                                  child: AnimatedContainer(
+                                    duration: const Duration(milliseconds: 150),
+                                    height: 48,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(color: isFocused ? Colors.white : (on ? HC.accent2 : Colors.white24), width: isFocused ? 3 : 1),
+                                      boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 2)] : [],
+                                    ),
+                                    child: Row(
+                                      children: <Widget>[
+                                        Icon(on ? Icons.check_rounded : Icons.add_rounded, color: Colors.white),
+                                        const SizedBox(width: 6),
+                                        const Text('My List',
+                                            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
                           );
                         },
                       ),
