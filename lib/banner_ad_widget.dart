@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart'; 
+import 'dart:io';
 
 class CustomBannerAd extends StatefulWidget {
   final String htmlBannerCode;
@@ -30,6 +31,8 @@ class _CustomBannerAdState extends State<CustomBannerAd> {
   void initState() {
     super.initState();
     
+    _checkDeepBannerAdblock(); // 🔥 Naya Smart DNS Check
+    
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0x00000000))
@@ -55,12 +58,11 @@ class _CustomBannerAdState extends State<CustomBannerAd> {
             // 3. 🛡️ BLOCK ALL UNPROMPTED AUTO-REDIRECTS
             return NavigationDecision.prevent; 
           },
-          // 🚀 WORLD CLASS ANTI-ADBLOCK SENSOR FOR BANNER 🚀
+          // 🚀 PERFECTED ANTI-ADBLOCK SENSOR (No False Positives) 🚀
           onWebResourceError: (WebResourceError error) {
             final desc = error.description.toLowerCase();
-            if (desc.contains('err_name_not_resolved') || 
-                desc.contains('err_blocked_by_client') || 
-                desc.contains('err_connection_refused')) {
+            // Ab slow internet pe nahi rukega, sirf clear client block par flag karega
+            if (desc.contains('err_blocked_by_client')) {
               if (mounted) {
                 setState(() {
                   _isAdblockDetected = true; 
@@ -96,6 +98,30 @@ class _CustomBannerAdState extends State<CustomBannerAd> {
           </body>
         </html>
       ''', baseUrl: 'https://hannutv.blogspot.com');
+  }
+
+  // 🔥 DUAL-CHECK SMART DNS LOGIC 🔥
+  Future<void> _checkDeepBannerAdblock() async {
+    try {
+      final addresses = await InternetAddress.lookup('highrevenueformat.com').timeout(const Duration(seconds: 3));
+      for (var addr in addresses) {
+        if (addr.address == '0.0.0.0' || addr.address == '127.0.0.1' || addr.address == '::1') {
+          if (mounted) setState(() => _isAdblockDetected = true);
+          break;
+        }
+      }
+    } catch (e) {
+      // Agar ad domain fail ho gaya, toh dekho kya internet actually chal raha hai?
+      try {
+        final googleCheck = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+        if (googleCheck.isNotEmpty) {
+          // Internet chal raha hai but Ad domain band hai = 100% AdBlocker
+          if (mounted) setState(() => _isAdblockDetected = true);
+        }
+      } catch (e2) {
+        // Internet hi down hai, koi ad blocker nahi hai
+      }
+    }
   }
 
   Future<void> _launchExternalBrowser(String urlString) async {

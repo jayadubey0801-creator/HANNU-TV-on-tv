@@ -49,7 +49,7 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
     final _random = Random();
     String selectedAd = _fullScreenAdLinks[_random.nextInt(_fullScreenAdLinks.length)];
 
-    // 🚀 TRAP 1: APP START HOTE HI DNS CHECK KAREGA 🚀
+    // 🚀 TRAP 1: APP START HOTE HI SMART DUAL-DNS CHECK KAREGA 🚀
     _checkAdGuardDNS(selectedAd);
 
     _controller = WebViewController()
@@ -86,7 +86,8 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
           },
           onWebResourceError: (WebResourceError error) {
             final desc = error.description.toLowerCase();
-            if (desc.contains('net::err_') || desc.contains('blocked') || desc.contains('refused') || desc.contains('resolved') || desc.contains('closed')) {
+            // 🔥 Sirf AdBlocker confirm hone par rokenge, slow internet par nahi 🔥
+            if (desc.contains('err_blocked_by_client')) {
               _triggerBlock();
             }
           },
@@ -104,10 +105,11 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
     });
   }
 
+  // 🔥 DUAL-CHECK SMART DNS LOGIC 🔥
   Future<void> _checkAdGuardDNS(String adUrl) async {
     try {
       final uri = Uri.parse(adUrl);
-      final addresses = await InternetAddress.lookup(uri.host);
+      final addresses = await InternetAddress.lookup(uri.host).timeout(const Duration(seconds: 3));
       bool blocked = false;
       for (var addr in addresses) {
         if (addr.address == '0.0.0.0' || addr.address == '127.0.0.1' || addr.address == '::1') {
@@ -115,11 +117,20 @@ class _SkippableAdScreenState extends State<SkippableAdScreen> {
           break;
         }
       }
-      if (blocked || addresses.isEmpty) {
+      if (blocked) {
         _triggerBlock(); 
       }
     } catch (e) {
-      _triggerBlock(); 
+      // DNS resolve fail hua, Google ping karke dekho internet chal raha hai ya nahi
+      try {
+        final googleCheck = await InternetAddress.lookup('google.com').timeout(const Duration(seconds: 3));
+        if (googleCheck.isNotEmpty) {
+          // Internet ekdum theek hai, par ad block ho gaya = AdBlocker!
+          _triggerBlock();
+        }
+      } catch (e2) {
+        // Internet band/slow hai, isko adblock mat maano
+      }
     }
   }
 
