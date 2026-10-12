@@ -199,6 +199,7 @@ class _HannuDashboardState extends State<HannuDashboard> {
     );
   }
 
+  // 🔥 DEEP FOCUS: Header Icons ke liye
   Widget _buildFocusableIcon(IconData icon, VoidCallback onTap, {int badge = 0}) {
     return StatefulBuilder(
       builder: (context, setState) {
@@ -213,8 +214,8 @@ class _HannuDashboardState extends State<HannuDashboard> {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isFocused ? Colors.white24 : Colors.transparent,
-                border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 2),
+                color: isFocused ? Colors.redAccent.withOpacity(0.2) : Colors.transparent,
+                border: Border.all(color: isFocused ? Colors.redAccent : Colors.transparent, width: isFocused ? 3 : 0),
               ),
               child: Stack(
                 clipBehavior: Clip.none,
@@ -269,7 +270,11 @@ class _HannuDashboardState extends State<HannuDashboard> {
             ),
             _buildFocusableIcon(Icons.search_rounded, () {
               final VoidCallback? f = widget.hooks.onOpenSearch;
-              if (f != null) f(); else openSearch(context);
+              if (f != null) {
+                f();
+              } else {
+                openSearch(context);
+              }
             }),
             AnimatedBuilder(
               animation: WatchlistStore.I,
@@ -312,23 +317,27 @@ class _HannuDashboardState extends State<HannuDashboard> {
                 onFocusChange: (focused) => setState(() => isFocused = focused),
                 child: GestureDetector(
                   onTap: () => _onTab(i),
-                  child: AnimatedContainer(
+                  child: AnimatedScale(
+                    scale: isFocused ? 1.05 : 1.0,
                     duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      gradient: sel ? HC.primary : null,
-                      color: isFocused ? Colors.white24 : (sel ? null : alpha(Colors.white, 0.06)),
-                      borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: isFocused ? Colors.white : (sel ? Colors.transparent : Colors.white24), width: isFocused ? 2 : 1),
-                      boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 8)] : [],
-                    ),
-                    child: Text(
-                      _tabs[i],
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
-                        color: sel ? Colors.white : Colors.white70,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        gradient: sel ? HC.primary : null,
+                        color: isFocused ? Colors.redAccent.withOpacity(0.2) : (sel ? null : alpha(Colors.white, 0.06)),
+                        borderRadius: BorderRadius.circular(22),
+                        // 🔥 DEEP RED BORDER FOCUS 🔥
+                        border: Border.all(color: isFocused ? Colors.redAccent : (sel ? Colors.transparent : Colors.white24), width: isFocused ? 3 : 1),
+                      ),
+                      child: Text(
+                        _tabs[i],
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+                          color: sel ? Colors.white : Colors.white70,
+                        ),
                       ),
                     ),
                   ),
@@ -398,14 +407,18 @@ class _HannuDashboardState extends State<HannuDashboard> {
                   onFocusChange: (focused) => setState(() => isFocused = focused),
                   child: GestureDetector(
                     onTap: () => openOtt(context, kOtts[i]),
-                    child: AnimatedContainer(
+                    child: AnimatedScale(
+                      scale: isFocused ? 1.1 : 1.0,
                       duration: const Duration(milliseconds: 150),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 2),
-                        boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 8)] : [],
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: isFocused ? Colors.redAccent : Colors.transparent, width: isFocused ? 4 : 0),
+                          boxShadow: isFocused ? [const BoxShadow(color: Colors.redAccent, blurRadius: 10)] : [],
+                        ),
+                        child: OttLogo(kOtts[i], w: 96, h: 60),
                       ),
-                      child: OttLogo(kOtts[i], w: 96, h: 60),
                     ),
                   ),
                 );
@@ -440,45 +453,49 @@ class _HannuDashboardState extends State<HannuDashboard> {
                     onFocusChange: (focused) => setState(() => isFocused = focused),
                     child: GestureDetector(
                       onTap: () => openGenre(context, g),
-                      child: AnimatedContainer(
+                      child: AnimatedScale(
+                        scale: isFocused ? 1.05 : 1.0,
                         duration: const Duration(milliseconds: 150),
-                        width: 112,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: <Color>[g.c1, g.c2],
-                          ),
-                          border: Border.all(color: isFocused ? Colors.white : Colors.white12, width: isFocused ? 2 : 1),
-                          boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 8)] : [],
-                        ),
-                        child: Stack(
-                          children: <Widget>[
-                            Positioned(
-                              right: -8,
-                              bottom: -8,
-                              child: Icon(g.icon, size: 52, color: alpha(Colors.white, 0.18)),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: 112,
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: <Color>[g.c1, g.c2],
                             ),
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  g.label,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w800,
-                                    height: 1.15,
-                                    color: Colors.white,
+                            border: Border.all(color: isFocused ? Colors.redAccent : Colors.white12, width: isFocused ? 4 : 1),
+                            boxShadow: isFocused ? [const BoxShadow(color: Colors.redAccent, blurRadius: 10)] : [],
+                          ),
+                          child: Stack(
+                            children: <Widget>[
+                              Positioned(
+                                right: -8,
+                                bottom: -8,
+                                child: Icon(g.icon, size: 52, color: alpha(Colors.white, 0.18)),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    g.label,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.15,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),

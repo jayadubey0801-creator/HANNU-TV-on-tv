@@ -118,10 +118,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   List similarMovies = [];
   bool isLoadingSimilar = false;
   
-  // 🔥 TV SPECIFIC VARIABLES 🔥
   bool isTvDevice = false;
-  bool _isTvFullScreen = false; // Tracks if TV player is in full screen mode
-  bool _isTvDescExpanded = false; // Tracks if description is open on TV
+  bool _isTvFullScreen = false; 
+  bool _isTvDescExpanded = false; 
 
   int totalSeasons = 1;
   List episodesList = [];
@@ -196,7 +195,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         isTvDevice = size.width > size.height && size.width > 600; 
         if (isTvDevice) {
           isFullScreen = true; 
-          _isTvFullScreen = false; // TV starts in split screen
+          _isTvFullScreen = false; 
         } else { 
           SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); 
           SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); 
@@ -221,7 +220,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _introAnimController.forward().then((_) { if (mounted) setState(() => showIntroAnimation = false); });
   }
 
-  // 🔥 DEEP FETCH FOR TV: 100+ Movies from multiple TMDB endpoints 🔥
   Future<void> _fetchSimilarMovies() async {
     setState(() => isLoadingSimilar = true);
     try {
@@ -279,19 +277,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               if (mounted) setState(() => isPageLoading = false);
             });
 
+            // 🔥 DEEP FIX: BLACK SCREEN & CAPTCHA RESOLVED 🔥
             String jsCode = '''
               document.body.style.backgroundColor = '#000000';
               document.documentElement.style.backgroundColor = '#000000';
               
               var style = document.createElement('style');
               style.innerHTML = `
-                header, nav, footer, .navbar, .logo, .search, form, 
-                h1, h2, h3, p, span, .menu,
-                .ad-container, .ads, [class*="ad-"], a[target="_blank"], iframe[src*="ads"], iframe[src*="bet"] { 
+                /* We ONLY hide known specific containers, not EVERYTHING to prevent hiding the player */
+                header, nav, footer, .navbar, .logo, .search, form, .menu,
+                .ad-container, .ads, [class*="ad-"], iframe[src*="ads"], iframe[src*="bet"] { 
                     display: none !important; 
-                    opacity: 0 !important; 
-                    visibility: hidden !important; 
-                    pointer-events: none !important;
                 }
                 
                 body, html { 
@@ -300,21 +296,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                     margin: 0 !important; 
                     padding: 0 !important; 
                 }
-                
-                iframe:not([src*="ads"]) {
-                    position: fixed !important;
-                    top: 0 !important;
-                    left: 0 !important;
-                    width: 100vw !important;
-                    height: 100vh !important;
-                    z-index: 99998 !important;
-                    border: none !important;
-                    background-color: #000000 !important;
-                }
               `;
               document.head.appendChild(style);
 
-              // 🔥 JS TOUCH AD BLOCKER 🔥
               window.open = function() { return null; };
               window.alert = function() { return null; };
               
@@ -327,6 +311,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               }, true);
 
               setInterval(function() {
+                // Maximizing video tag if it exists
                 var vids = document.getElementsByTagName('video');
                 if (vids.length > 0) {
                   var v = vids[0];
@@ -341,6 +326,21 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   
                   if (v.currentTime > 0.5 && !v.paused) {
                     VideoState.postMessage('playing');
+                  }
+                } else {
+                  // If video tag is hidden inside an iframe, maximize all non-ad iframes
+                  var iframes = document.getElementsByTagName('iframe');
+                  for(var i=0; i<iframes.length; i++) {
+                     var src = iframes[i].src || '';
+                     if(!src.includes('ads') && !src.includes('bet')) {
+                         iframes[i].style.position = 'fixed';
+                         iframes[i].style.top = '0';
+                         iframes[i].style.left = '0';
+                         iframes[i].style.width = '100vw';
+                         iframes[i].style.height = '100vh';
+                         iframes[i].style.zIndex = '99998';
+                         iframes[i].style.backgroundColor = '#000000';
+                     }
                   }
                 }
                 
@@ -1202,7 +1202,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     return _TvFocusButton(onTap: onTap, borderRadius: borderRadius ?? BorderRadius.circular(8), child: child);
   }
 
-  // 📺 ANDROID TV SPLIT-SCREEN LAYOUT 📺
+  // 📺 ANDROID TV SPLIT-SCREEN LAYOUT (GLOW BACKGROUND ENABLED) 📺
   Widget _buildTVLayout() {
     if (_isTvFullScreen) {
       return Scaffold(
@@ -1238,192 +1238,201 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       );
     }
 
-    // 📺 SPLIT SCREEN LAYOUT (Tere red, green, pink sketch ke hisaab se) 📺
+    // 📺 SPLIT SCREEN LAYOUT WITH AMBIENT GLOW 📺
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0F0F),
-      body: Row(
-        children: [
-          // 🔵 LEFT SIDE: Video Player (Top), Desc/Servers/Search (Bottom)
-          Expanded(
-            flex: 7,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 🔵 Sky Blue area: Video Player
-                SizedBox(
-                  width: double.infinity,
-                  height: MediaQuery.of(context).size.height * 0.55,
-                  child: Stack(
-                    children: [
-                      Container(color: Colors.black, child: _PinchZoom(zoom: _videoZoom, child: WebViewWidget(controller: _controller))),
-                      if (isPageLoading && !isVideoPlaying) Positioned.fill(child: Container(color: Colors.black, child: const Center(child: CircularProgressIndicator(color: Colors.redAccent)))),
-                      Positioned(
-                        top: 15, right: 20,
-                        child: _buildFocusableItem(
-                          onTap: () => setState(() => _isTvFullScreen = true), // Click se Full Screen hoga
-                          borderRadius: BorderRadius.circular(12),
-                          child: Opacity(opacity: 0.9, child: Image.asset('assets/logo.png', height: 40)),
+      backgroundColor: Colors.transparent, // Allow Background Glow to shine!
+      body: _AmbientBackground(
+        color: _ambientColor,
+        child: _AmbientGlow(
+          zones: _ambientZones,
+          child: Row(
+            children: [
+              // 🔵 LEFT SIDE: Video Player (Top), Desc/Servers/Search (Bottom)
+              Expanded(
+                flex: 7,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 🔵 Sky Blue area: Video Player
+                    SizedBox(
+                      width: double.infinity,
+                      height: MediaQuery.of(context).size.height * 0.55,
+                      child: Stack(
+                        children: [
+                          Container(color: Colors.black, child: _PinchZoom(zoom: _videoZoom, child: WebViewWidget(controller: _controller))),
+                          if (isPageLoading && !isVideoPlaying) Positioned.fill(child: Container(color: Colors.black, child: const Center(child: CircularProgressIndicator(color: Colors.redAccent)))),
+                          Positioned(
+                            top: 15, right: 20,
+                            child: _buildFocusableItem(
+                              onTap: () => setState(() => _isTvFullScreen = true), // Click se Full Screen hoga
+                              borderRadius: BorderRadius.circular(12),
+                              child: Opacity(opacity: 0.9, child: Image.asset('assets/logo.png', height: 40)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 🟢 / 💗 Green & Pink area: Desc, Servers, Search
+                    Expanded(
+                      child: Container(
+                        color: Colors.black45, // Transparent black to let glow pass
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(widget.movieTitle, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  const Icon(Icons.star, color: Colors.amber, size: 20), const SizedBox(width: 6),
+                                  Text(widget.rating, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(width: 16),
+                                  Text(widget.year, style: const TextStyle(color: Colors.grey, fontSize: 16)),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              // 💗 Pink: Search & Watchlist
+                              Row(
+                                children: [
+                                  _buildFocusableItem(
+                                    onTap: _showSearchSheet,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: _buildActionButton(Icons.search, "Search on TV", activeColor: Colors.white),
+                                  ),
+                                  const SizedBox(width: 15),
+                                  _buildFocusableItem(
+                                    onTap: _toggleWatchlist,
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: _buildActionButton(Icons.bookmark_border, "Watchlist", activeColor: Colors.white),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 20),
+                              // 🟢 Green: Servers List
+                              const Text("Available Servers", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 10),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: servers.map((srv) {
+                                    final isSelected = activeServer == srv['key'];
+                                    return _buildFocusableItem(
+                                      onTap: () { if (activeServer != srv['key']) { setState(() => activeServer = srv['key']!); _initStream(); } },
+                                      borderRadius: BorderRadius.circular(20),
+                                      child: Container(
+                                        margin: const EdgeInsets.only(right: 12), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                        decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.grey[900], borderRadius: BorderRadius.circular(20)),
+                                        child: Text(srv['name']!, style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              // 🟢 Green Top: Collapsible Description (By Default Hide Rahegi)
+                              _buildFocusableItem(
+                                onTap: () => setState(() => _isTvDescExpanded = !_isTvDescExpanded),
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          const Text("Story / Description", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                          Icon(_isTvDescExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white),
+                                        ],
+                                      ),
+                                      if (_isTvDescExpanded) ...[
+                                        const SizedBox(height: 10),
+                                        Text(widget.overview.isNotEmpty ? widget.overview : (details?['overview'] ?? 'Loading description...'), style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5)),
+                                      ]
+                                    ]
+                                  )
+                                )
+                              ),
+                              const SizedBox(height: 30),
+                            ],
+                          ),
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 🔴 RED AREA: 100 Suggested Movies List
+              Container(width: 2, color: Colors.white10), 
+              Expanded(
+                flex: 3,
+                child: Container(
+                  color: Colors.black45, // Let glow pass
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: Text("Suggested", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                      ),
+                      Expanded(
+                        child: similarMovies.isEmpty 
+                          ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
+                          : ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                              itemCount: similarMovies.length,
+                              itemBuilder: (context, index) {
+                                final m = similarMovies[index];
+                                return _buildFocusableItem(
+                                  onTap: () { 
+                                    Navigator.pushReplacement(
+                                      context, 
+                                      MaterialPageRoute(builder: (context) => SkippableAdScreen(
+                                        adDuration: 10,
+                                        nextScreen: VideoPlayerPage(tmdbId: m['id'], mediaType: m['mediaType'], movieTitle: m['title'], rating: m['rating'], year: m['year'])
+                                      ))
+                                    ); 
+                                  },
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 15),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: CachedNetworkImage(
+                                            imageUrl: m['posterUrl'] != '' ? m['posterUrl'] : 'https://via.placeholder.com/150',
+                                            width: 70, height: 100, fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const SizedBox(height: 5),
+                                              Text(m['title'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+                                              const SizedBox(height: 5),
+                                              Text("★ ${m['rating']}  •  ${m['year']}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                            ],
+                                          ),
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                       ),
                     ],
                   ),
                 ),
-                // 🟢 / 💗 Green & Pink area: Desc, Servers, Search
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.movieTitle, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            const Icon(Icons.star, color: Colors.amber, size: 20), const SizedBox(width: 6),
-                            Text(widget.rating, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)), const SizedBox(width: 16),
-                            Text(widget.year, style: const TextStyle(color: Colors.grey, fontSize: 16)),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        // 💗 Pink: Search & Watchlist
-                        Row(
-                          children: [
-                            _buildFocusableItem(
-                              onTap: _showSearchSheet,
-                              borderRadius: BorderRadius.circular(20),
-                              child: _buildActionButton(Icons.search, "Search on TV", activeColor: Colors.white),
-                            ),
-                            const SizedBox(width: 15),
-                            _buildFocusableItem(
-                              onTap: _toggleWatchlist,
-                              borderRadius: BorderRadius.circular(20),
-                              child: _buildActionButton(Icons.bookmark_border, "Watchlist", activeColor: Colors.white),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        // 🟢 Green: Servers List
-                        const Text("Available Servers", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 10),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: servers.map((srv) {
-                              final isSelected = activeServer == srv['key'];
-                              return _buildFocusableItem(
-                                onTap: () { if (activeServer != srv['key']) { setState(() => activeServer = srv['key']!); _initStream(); } },
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  margin: const EdgeInsets.only(right: 12), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                  decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.grey[900], borderRadius: BorderRadius.circular(20)),
-                                  child: Text(srv['name']!, style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                                ),
-                              );
-                            }).toList(),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        // 🟢 Green Top: Collapsible Description (By Default Hide Rahegi)
-                        _buildFocusableItem(
-                          onTap: () => setState(() => _isTvDescExpanded = !_isTvDescExpanded),
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(12)),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    const Text("Story / Description", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                    Icon(_isTvDescExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white),
-                                  ],
-                                ),
-                                if (_isTvDescExpanded) ...[
-                                  const SizedBox(height: 10),
-                                  Text(widget.overview.isNotEmpty ? widget.overview : (details?['overview'] ?? 'Loading description...'), style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5)),
-                                ]
-                              ]
-                            )
-                          )
-                        ),
-                        const SizedBox(height: 30),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // 🔴 RED AREA: 100 Suggested Movies List
-          Container(width: 2, color: Colors.white10), 
-          Expanded(
-            flex: 3,
-            child: Container(
-              color: const Color(0xFF151515),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text("Suggested", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-                  ),
-                  Expanded(
-                    child: similarMovies.isEmpty 
-                      ? const Center(child: CircularProgressIndicator(color: Colors.redAccent))
-                      : ListView.builder(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          itemCount: similarMovies.length,
-                          itemBuilder: (context, index) {
-                            final m = similarMovies[index];
-                            return _buildFocusableItem(
-                              onTap: () { 
-                                Navigator.pushReplacement(
-                                  context, 
-                                  MaterialPageRoute(builder: (context) => SkippableAdScreen(
-                                    adDuration: 10,
-                                    nextScreen: VideoPlayerPage(tmdbId: m['id'], mediaType: m['mediaType'], movieTitle: m['title'], rating: m['rating'], year: m['year'])
-                                  ))
-                                ); 
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 15),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: CachedNetworkImage(
-                                        imageUrl: m['posterUrl'] != '' ? m['posterUrl'] : 'https://via.placeholder.com/150',
-                                        width: 70, height: 100, fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const SizedBox(height: 5),
-                                          Text(m['title'], maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-                                          const SizedBox(height: 5),
-                                          Text("★ ${m['rating']}  •  ${m['year']}", style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                                        ],
-                                      ),
-                                    )
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                  ),
-                ],
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1550,8 +1559,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                           const SizedBox(height: 10),
                           const Text("Sponsored Ads", style: TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 10),
-                          const CustomBannerAd(htmlBannerCode: _adsterraBannerSnippet),
-                          const SizedBox(height: 16),
                           const CustomBannerAd(htmlBannerCode: _adsterraBannerSnippet),
                           const SizedBox(height: 16),
                           const CustomBannerAd(htmlBannerCode: _adsterraBannerSnippet),
@@ -1785,8 +1792,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       }
     }
 
-    // 📺 YAHAN TV REMOTE KA BACK BUTTON LOGIC HAI 📺
-    // Jab player TV par full screen mein ho, back dabane se app band nahi hoga, split screen hoga.
+    // 📺 TV REMOTE KA BACK BUTTON LOGIC (PANTYFLIX GAYAB NAHI HOGA)
     return PopScope(
       canPop: !(isTvDevice && _isTvFullScreen),
       onPopInvokedWithResult: (didPop, result) {
@@ -1814,6 +1820,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 }
 
+// 🔥 DEEP FOCUS LOGIC: Remote se clear select hoga 🔥
 class _TvFocusButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -1830,7 +1837,20 @@ class _TvFocusButtonState extends State<_TvFocusButton> {
       onFocusChange: (hasFocus) { if (mounted) setState(() => _hasFocus = hasFocus); },
       child: InkWell(
         onTap: widget.onTap, borderRadius: widget.borderRadius,
-        child: AnimatedContainer(duration: const Duration(milliseconds: 150), decoration: BoxDecoration(borderRadius: widget.borderRadius, border: Border.all(color: _hasFocus ? Colors.redAccent : Colors.transparent, width: _hasFocus ? 3.5 : 0), boxShadow: _hasFocus ? [BoxShadow(color: Colors.redAccent.withOpacity(0.65), blurRadius: 10)] : []), child: widget.child),
+        child: AnimatedScale(
+          scale: _hasFocus ? 1.05 : 1.0, // Thoda zoom hoga
+          duration: const Duration(milliseconds: 150),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            decoration: BoxDecoration(
+              borderRadius: widget.borderRadius,
+              // Mota Laal Border aur Glow aayega focus par
+              border: Border.all(color: _hasFocus ? Colors.redAccent : Colors.transparent, width: _hasFocus ? 4.0 : 0),
+              boxShadow: _hasFocus ? [BoxShadow(color: Colors.redAccent.withOpacity(0.8), blurRadius: 15, spreadRadius: 2)] : [],
+            ),
+            child: widget.child,
+          ),
+        ),
       ),
     );
   }
