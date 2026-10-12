@@ -277,8 +277,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               if (mounted) setState(() => isPageLoading = false);
             });
 
-            // 🔥 DEEP FIX: CLIENT-SIDE CRASH OVERLAY TRICK 🔥
-            // Ab hum website ka koi logic ya tag delete nahi karenge, balki video ko uske upar chipka denge.
             String jsCode = '''
               document.body.style.backgroundColor = '#000000';
               
@@ -299,7 +297,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 if (vids.length > 0) {
                   targetElement = vids[0];
                 } else {
-                  // Video nahi hai? Toh shayad iframe mein chal raha ho (vidcore/rift)
                   var iframes = document.getElementsByTagName('iframe');
                   for(var i=0; i<iframes.length; i++) {
                      var src = iframes[i].src || '';
@@ -310,7 +307,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   }
                 }
 
-                // Video ya main iframe ko utha kar screen par sabse aage (999999) kar do
                 if(targetElement) {
                     targetElement.style.position = 'fixed';
                     targetElement.style.top = '0';
@@ -1117,7 +1113,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               const SizedBox(height: 10),
               _infoRow('Released', release),
               _infoRow('Runtime', runtime),
-              _infoRow('Languages', Languages),
+              _infoRow('Languages', languages), // CORRECTION HERE: changed 'Languages' to 'languages'
               _infoRow('Status', status),
               _infoRow('Rating', ratingStr),
             ],
@@ -1172,6 +1168,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     return _TvFocusButton(onTap: onTap, borderRadius: borderRadius ?? BorderRadius.circular(8), child: child);
   }
 
+  // 📺 ANDROID TV SPLIT-SCREEN LAYOUT (GLOW BACKGROUND ENABLED) 📺
   Widget _buildTVLayout() {
     if (_isTvFullScreen) {
       return Scaffold(
@@ -1190,7 +1187,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               top: 20, right: 20,
               child: SafeArea(
                 child: _buildFocusableItem(
-                  onTap: () => setState(() => _isTvFullScreen = false),
+                  onTap: () => setState(() => _isTvFullScreen = false), // Wapas Split-Screen me layega
                   borderRadius: BorderRadius.circular(12),
                   child: Opacity(
                     opacity: 0.9,
@@ -1207,19 +1204,22 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       );
     }
 
+    // 📺 SPLIT SCREEN LAYOUT WITH AMBIENT GLOW 📺
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.transparent, // Allow Background Glow to shine!
       body: _AmbientBackground(
         color: _ambientColor,
         child: _AmbientGlow(
           zones: _ambientZones,
           child: Row(
             children: [
+              // 🔵 LEFT SIDE: Video Player (Top), Desc/Servers/Search (Bottom)
               Expanded(
                 flex: 7,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // 🔵 Sky Blue area: Video Player
                     SizedBox(
                       width: double.infinity,
                       height: MediaQuery.of(context).size.height * 0.55,
@@ -1230,7 +1230,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                           Positioned(
                             top: 15, right: 20,
                             child: _buildFocusableItem(
-                              onTap: () => setState(() => _isTvFullScreen = true),
+                              onTap: () => setState(() => _isTvFullScreen = true), // Click se Full Screen hoga
                               borderRadius: BorderRadius.circular(12),
                               child: Opacity(opacity: 0.9, child: Image.asset('assets/logo.png', height: 40)),
                             ),
@@ -1238,9 +1238,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                         ],
                       ),
                     ),
+                    // 🟢 / 💗 Green & Pink area: Desc, Servers, Search
                     Expanded(
                       child: Container(
-                        color: Colors.black45,
+                        color: Colors.black45, // Transparent black to let glow pass
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.all(20),
                           child: Column(
@@ -1256,6 +1257,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                                 ],
                               ),
                               const SizedBox(height: 16),
+                              // 💗 Pink: Search & Watchlist
                               Row(
                                 children: [
                                   _buildFocusableItem(
@@ -1272,6 +1274,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                                 ],
                               ),
                               const SizedBox(height: 20),
+                              // 🟢 Green: Servers List
                               const Text("Available Servers", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 10),
                               SingleChildScrollView(
@@ -1292,6 +1295,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                                 ),
                               ),
                               const SizedBox(height: 20),
+                              // 🟢 Green Top: Collapsible Description (By Default Hide Rahegi)
                               _buildFocusableItem(
                                 onTap: () => setState(() => _isTvDescExpanded = !_isTvDescExpanded),
                                 borderRadius: BorderRadius.circular(12),
@@ -1325,11 +1329,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   ],
                 ),
               ),
+              // 🔴 RED AREA: 100 Suggested Movies List
               Container(width: 2, color: Colors.white10), 
               Expanded(
                 flex: 3,
                 child: Container(
-                  color: Colors.black45,
+                  color: Colors.black45, // Let glow pass
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1405,6 +1410,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (isTvDevice) {
       pageContent = _buildTVLayout();
     } else {
+      // 📱 MOBILE LAYOUT (100% UNTOUCHED) 📱
       if (isFullScreen) {
         pageContent = Scaffold(
           backgroundColor: Colors.black,
@@ -1752,6 +1758,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       }
     }
 
+    // 📺 TV REMOTE KA BACK BUTTON LOGIC (PANTYFLIX GAYAB NAHI HOGA)
     return PopScope(
       canPop: !(isTvDevice && _isTvFullScreen),
       onPopInvokedWithResult: (didPop, result) {

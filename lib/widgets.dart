@@ -132,7 +132,7 @@ class RankNumber extends StatelessWidget {
   }
 }
 
-// 🔥 DEEP FOCUS LOGIC ADDED HERE (For White Glow) 🔥
+// 🔥 DEEP FOCUS LOGIC ADDED HERE (For Bright White Glow & Auto-Scroll) 🔥
 class PosterCard extends StatelessWidget {
   const PosterCard({
     super.key,
@@ -161,7 +161,10 @@ class PosterCard extends StatelessWidget {
         return Focus(
           onFocusChange: (focused) {
             setStateFocus(() => isFocused = focused);
-            if (focused) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
+            // Jab TV remote ka button niche dabega tab page auto scroll hoga us movie ke focus me
+            if (focused) {
+               Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
+            }
           },
           child: InkWell(
             onTap: onTap ?? () => Hooks.open(context, item),
@@ -174,7 +177,7 @@ class PosterCard extends StatelessWidget {
                 duration: const Duration(milliseconds: 150),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  // 🔥 WHITE BORDER AND GLOW 🔥
+                  // 🔥 PERFECT WHITE BORDER AND GLOW 🔥
                   border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: isFocused ? 3.0 : 0),
                   boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 3)] : [],
                 ),
