@@ -1,21 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+
 import 'config.dart';
+import 'hero.dart';
 import 'pages.dart';
 import 'stores.dart';
 import 'tmdb_service.dart';
 import 'widgets.dart';
 
-class TVDashboard extends StatefulWidget {
+class HannuDashboard extends StatefulWidget {
+  const HannuDashboard({super.key, this.hooks = const DashboardHooks()});
   final DashboardHooks hooks;
-  const TVDashboard({super.key, this.hooks = const DashboardHooks()});
 
   @override
-  State<TVDashboard> createState() => _TVDashboardState();
+  State<HannuDashboard> createState() => _HannuDashboardState();
 }
 
-class _TVDashboardState extends State<TVDashboard> {
-  static const List<String> _tabs = [
+class _HannuDashboardState extends State<HannuDashboard> {
+  static const List<String> _tabs = <String>[
     'HANNU TRENDING',
     'Anime',
     'Movies',
@@ -24,10 +25,9 @@ class _TVDashboardState extends State<TVDashboard> {
     'Live TV',
   ];
 
-  final ScrollController _scrollController = ScrollController();
-  final FocusScopeNode _focusScopeNode = FocusScopeNode();
-
-  late Future<List<TmdbItem>> _heroFuture;
+  final ScrollController _scroll = ScrollController();
+  final ValueNotifier<Color> _ambient = ValueNotifier<Color>(HC.accent);
+  late Future<List<TmdbItem>> _hero;
   int _epoch = 0;
 
   @override
@@ -37,31 +37,37 @@ class _TVDashboardState extends State<TVDashboard> {
     WatchlistStore.I.load();
     ContinueWatchingStore.I.load();
     NotificationStore.I.init();
-    _heroFuture = Tmdb.I.heroItems();
+    _hero = Tmdb.I.heroItems();
+  }
+
+  @override
+  void didUpdateWidget(covariant HannuDashboard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    Hooks.cfg = widget.hooks;
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
-    _focusScopeNode.dispose();
+    _scroll.dispose();
+    _ambient.dispose();
     super.dispose();
   }
 
   Future<void> _refresh() async {
     Tmdb.I.clearCache();
-    final f = Tmdb.I.heroItems();
+    final Future<List<TmdbItem>> f = Tmdb.I.heroItems();
     setState(() {
       _epoch++;
-      _heroFuture = f;
+      _hero = f;
     });
     await f;
   }
 
-  void _onTabSelected(int index) {
-    switch (index) {
+  void _onTab(int i) {
+    switch (i) {
       case 0:
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+        if (_scroll.hasClients) {
+          _scroll.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
         }
         break;
       case 1:
@@ -77,8 +83,13 @@ class _TVDashboardState extends State<TVDashboard> {
         openCategory(context, CategoryKind.kids);
         break;
       case 5:
-        if (widget.hooks.onOpenLiveTv != null) {
-          widget.hooks.onOpenLiveTv!();
+        final VoidCallback? f = widget.hooks.onOpenLiveTv;
+        if (f != null) {
+          f();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Live TV: DashboardHooks.onOpenLiveTv me apni Live TV screen do.')),
+          );
         }
         break;
     }
@@ -87,102 +98,108 @@ class _TVDashboardState extends State<TVDashboard> {
   @override
   Widget build(BuildContext context) {
     return Theme(
-      data: hannuTheme().copyWith(
-        focusColor: Colors.white24, // TV remote focus highlight
-      ),
+      data: hannuTheme(),
       child: Scaffold(
         backgroundColor: HC.bg,
-        body: FocusScope(
-          node: _focusScopeNode,
-          child: Stack(
-            children: [
-              // Safe Area & Scrollable Content
-              SafeArea(
-                child: CustomScrollView(
-                  controller: _scrollController,
-                  slivers: [
-                    SliverList(delegate: SliverChildListDelegate(_buildTVContent())),
-                  ],
-                ),
+        body: Stack(
+          children: <Widget>[
+            _ambientBackground(),
+            RefreshIndicator(
+              color: HC.accent2,
+              backgroundColor: HC.surface,
+              onRefresh: _refresh,
+              child: CustomScrollView(
+                controller: _scroll,
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                cacheExtent: 900,
+                slivers: <Widget>[
+                  SliverList(delegate: SliverChildListDelegate(_children())),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  List<Widget> _buildTVContent() {
-    final List<Widget> content = [
-      _buildTVHeader(),
-      _buildTVTabs(),
-      const SizedBox(height: 20),
-      _buildTVHeroSection(),
-      const SizedBox(height: 20),
-      _buildTVContinueWatching(),
-      _buildTVOttSection(),
-      
-      // Top 10 India TV Row
-      TVPosterRow(
-        key: ValueKey<String>('tv_india$_epoch'),
+  List<Widget> _children() {
+    final List<Widget> c = <Widget>[
+      _header(),
+      _tabsRow(),
+      const SizedBox(height: 8),
+      _heroSection(),
+      const ContinueWatchingRow(),
+      _ottSection(),
+      PosterRow(
+        key: ValueKey<String>('india$_epoch'),
         title: 'Top 10 in India',
+        subtitle: 'India ke OTTs par abhi sabse zyada trending',
         ranked: true,
+        width: 128,
+        hideIfEmpty: false,
         loader: () => Tmdb.I.topIndia(),
       ),
-      
-      // Top 10 World TV Row
-      TVPosterRow(
-        key: ValueKey<String>('tv_world$_epoch'),
+      const AdSlot(),
+      PosterRow(
+        key: ValueKey<String>('world$_epoch'),
         title: 'Top 10 Worldwide',
+        subtitle: 'Duniya bhar me trending',
         ranked: true,
+        width: 128,
+        hideIfEmpty: false,
         loader: () => Tmdb.I.topWorld(),
       ),
-      
-      _buildTVGenreChips(),
+      _genreChips(),
     ];
-
-    // Build standard genre rows
     for (int i = 0; i < kDashGenres.length; i++) {
-      final g = kDashGenres[i];
-      content.add(TVGenreBlock(
-        key: ValueKey<String>('tv_${g.key}$_epoch'),
+      final GenreDef g = kDashGenres[i];
+      c.add(GenreBlock(
+        key: ValueKey<String>('${g.key}$_epoch'),
         g: g,
         onSeeAll: () => openGenre(context, g),
       ));
+      if (i == 2) c.add(const AdSlot());
     }
-    
-    content.add(const SizedBox(height: 60)); // Bottom padding
-    return content;
+    c.add(const SizedBox(height: 40));
+    return c;
   }
 
-  Widget _buildTVHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(40, 20, 40, 10), // Wider padding for TV
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Image.asset('assets/logo.png', height: 50, errorBuilder: (_, __, ___) => const Text('HANNUTV', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900))),
-          Row(
-            children: [
-              _buildTVFocusableIcon(Icons.search_rounded, () {
-                if (widget.hooks.onOpenSearch != null) {
-                  widget.hooks.onOpenSearch!();
-                } else {
-                  openSearch(context);
-                }
-              }),
-              const SizedBox(width: 15),
-              _buildTVFocusableIcon(Icons.bookmark_border_rounded, () => openWatchlist(context)),
-              const SizedBox(width: 15),
-              _buildTVFocusableIcon(Icons.settings, () => showSupportSheet(context)), 
-            ],
-          )
-        ],
+  Widget _ambientBackground() {
+    return Positioned(
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 620,
+      child: IgnorePointer(
+        child: ValueListenableBuilder<Color>(
+          valueListenable: _ambient,
+          builder: (BuildContext _, Color target, Widget? __) {
+            return TweenAnimationBuilder<Color?>(
+              tween: ColorTween(end: target),
+              duration: const Duration(milliseconds: 1100),
+              curve: Curves.easeInOutCubic,
+              builder: (BuildContext _, Color? v, Widget? __) {
+                final Color col = v ?? target;
+                return DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: <Color>[alpha(col, 0.9), alpha(col, 0.35), HC.bg],
+                      stops: const <double>[0.0, 0.5, 1.0],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildTVFocusableIcon(IconData icon, VoidCallback onTap) {
+  Widget _buildFocusableIcon(IconData icon, VoidCallback onTap, {int badge = 0}) {
     return StatefulBuilder(
       builder: (context, setState) {
         bool isFocused = false;
@@ -190,17 +207,38 @@ class _TVDashboardState extends State<TVDashboard> {
           onFocusChange: (focused) => setState(() => isFocused = focused),
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(30),
+            borderRadius: BorderRadius.circular(25),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isFocused ? Colors.white : Colors.transparent,
-                border: Border.all(color: isFocused ? Colors.white : Colors.white24, width: 2),
-                boxShadow: isFocused ? [const BoxShadow(color: Colors.white54, blurRadius: 10)] : [],
+                color: isFocused ? Colors.white24 : Colors.transparent,
+                border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 2),
               ),
-              child: Icon(icon, size: 30, color: isFocused ? Colors.black : Colors.white),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: <Widget>[
+                  Icon(icon, size: 26, color: Colors.white),
+                  if (badge > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: IgnorePointer(
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(color: HC.accent2, borderRadius: BorderRadius.circular(9)),
+                          child: Text(
+                            badge > 9 ? '9+' : '$badge',
+                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         );
@@ -208,45 +246,89 @@ class _TVDashboardState extends State<TVDashboard> {
     );
   }
 
-  Widget _buildTVTabs() {
+  Widget _header() {
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 4, 2),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Image.asset(
+                  'assets/logo.png',
+                  height: 34,
+                  fit: BoxFit.contain,
+                  errorBuilder: (BuildContext _, Object __, StackTrace? ___) => const Text(
+                    'HANNUTV',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 1),
+                  ),
+                ),
+              ),
+            ),
+            _buildFocusableIcon(Icons.search_rounded, () {
+              final VoidCallback? f = widget.hooks.onOpenSearch;
+              if (f != null) f(); else openSearch(context);
+            }),
+            AnimatedBuilder(
+              animation: WatchlistStore.I,
+              builder: (BuildContext _, Widget? __) => _buildFocusableIcon(
+                Icons.bookmark_border_rounded,
+                () => openWatchlist(context),
+                badge: WatchlistStore.I.length,
+              ),
+            ),
+            AnimatedBuilder(
+              animation: NotificationStore.I,
+              builder: (BuildContext _, Widget? __) => _buildFocusableIcon(
+                Icons.notifications_none_rounded,
+                () => showNotifications(context),
+                badge: NotificationStore.I.badge,
+              ),
+            ),
+            _buildFocusableIcon(Icons.support_agent_rounded, () => showSupportSheet(context)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tabsRow() {
     return SizedBox(
-      height: 60,
+      height: 48,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
         itemCount: _tabs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 15),
-        itemBuilder: (context, i) {
-          final bool isDashboard = i == 0;
+        separatorBuilder: (BuildContext _, int __) => const SizedBox(width: 10),
+        itemBuilder: (BuildContext _, int i) {
+          final bool sel = i == 0; 
           return StatefulBuilder(
             builder: (context, setState) {
               bool isFocused = false;
               return Focus(
                 onFocusChange: (focused) => setState(() => isFocused = focused),
-                child: InkWell(
-                  onTap: () => _onTabSelected(i),
-                  borderRadius: BorderRadius.circular(30),
+                child: GestureDetector(
+                  onTap: () => _onTab(i),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      gradient: isDashboard ? HC.primary : null,
-                      color: isFocused 
-                          ? Colors.white 
-                          : (isDashboard ? null : Colors.white10),
-                      borderRadius: BorderRadius.circular(30),
-                      border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 2),
-                      boxShadow: isFocused ? [const BoxShadow(color: Colors.white54, blurRadius: 10)] : [],
+                      gradient: sel ? HC.primary : null,
+                      color: isFocused ? Colors.white24 : (sel ? null : alpha(Colors.white, 0.06)),
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(color: isFocused ? Colors.white : (sel ? Colors.transparent : Colors.white24), width: isFocused ? 2 : 1),
+                      boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 8)] : [],
                     ),
                     child: Text(
                       _tabs[i],
                       style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isFocused 
-                            ? Colors.black 
-                            : Colors.white,
+                        fontSize: 13.5,
+                        fontWeight: sel ? FontWeight.w800 : FontWeight.w600,
+                        color: sel ? Colors.white : Colors.white70,
                       ),
                     ),
                   ),
@@ -259,411 +341,154 @@ class _TVDashboardState extends State<TVDashboard> {
     );
   }
 
-  Widget _buildTVHeroSection() {
+  Widget _heroSection() {
+    return FutureBuilder<List<TmdbItem>>(
+      future: _hero,
+      builder: (BuildContext ctx, AsyncSnapshot<List<TmdbItem>> s) {
+        if (s.connectionState != ConnectionState.done) return const HeroSkeleton();
+        final List<TmdbItem> items = s.data ?? const <TmdbItem>[];
+        if (items.isEmpty) return _heroError();
+        return HeroCarousel(
+          key: ValueKey<String>('hero$_epoch'),
+          items: items,
+          onColor: (Color c) => _ambient.value = c,
+        );
+      },
+    );
+  }
+
+  Widget _heroError() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: FutureBuilder<List<TmdbItem>>(
-        future: _heroFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) return const SizedBox(height: 300, child: HeroSkeleton());
-          final items = snapshot.data ?? [];
-          if (items.isEmpty) return const SizedBox(height: 300, child: Center(child: Text("Unable to load trending movies", style: TextStyle(color: Colors.white))));
-          
-          return TVHeroCarousel(items: items);
-        },
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
+      child: GestureDetector(
+        onTap: _refresh,
+        child: Container(
+          height: 170,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(color: HC.surface, borderRadius: BorderRadius.circular(20)),
+          child: Text(
+            tmdbKeyMissing
+                ? 'TMDB API key nahi mili.\nlib/dashboard/config.dart me paste karo.'
+                : 'Trending load nahi hua.\nInternet check karo — tap karke retry karo.',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: HC.dim, height: 1.5),
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildTVContinueWatching() {
-     return AnimatedBuilder(
-      animation: ContinueWatchingStore.I,
-      builder: (context, _) {
-        final list = ContinueWatchingStore.I.entries;
-        if (list.isEmpty) return const SizedBox.shrink();
-        
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(left: 40, bottom: 15),
-              child: Text('Continue Watching', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
-            SizedBox(
-              height: 250,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                itemCount: list.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 20),
-                itemBuilder: (context, i) {
-                  return TVPosterCard(
-                    item: list[i].item,
-                    progress: list[i].progress,
-                    onLongPress: () => ContinueWatchingStore.I.remove(list[i].item),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 30),
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildTVOttSection() {
+  Widget _ottSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 40, bottom: 15),
-          child: Text('Streaming on', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-        ),
+      children: <Widget>[
+        const SectionTitle('Streaming on'),
         SizedBox(
-          height: 80,
+          height: 62,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 40),
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: kOtts.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 20),
-            itemBuilder: (context, i) {
-              return StatefulBuilder(
-                builder: (context, setState) {
-                  bool isFocused = false;
-                  return Focus(
-                    onFocusChange: (focused) => setState(() => isFocused = focused),
-                    child: InkWell(
-                      onTap: () => openOtt(context, kOtts[i]),
-                      borderRadius: BorderRadius.circular(16),
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 3),
-                          boxShadow: isFocused ? [const BoxShadow(color: Colors.white54, blurRadius: 10)] : [],
-                        ),
-                        child: OttLogo(kOtts[i], w: 120, h: 80, radius: 12),
+            separatorBuilder: (BuildContext _, int __) => const SizedBox(width: 12),
+            itemBuilder: (BuildContext _, int i) => StatefulBuilder(
+              builder: (context, setState) {
+                bool isFocused = false;
+                return Focus(
+                  onFocusChange: (focused) => setState(() => isFocused = focused),
+                  child: GestureDetector(
+                    onTap: () => openOtt(context, kOtts[i]),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 2),
+                        boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 8)] : [],
                       ),
+                      child: OttLogo(kOtts[i], w: 96, h: 60),
                     ),
-                  );
-                }
-              );
-            },
+                  ),
+                );
+              }
+            ),
           ),
         ),
-        const SizedBox(height: 30),
+        const SizedBox(height: 20),
       ],
     );
   }
 
-  Widget _buildTVGenreChips() {
-     return Column(
+  Widget _genreChips() {
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(left: 40, bottom: 15),
-          child: Text('Genres', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-        ),
+      children: <Widget>[
+        const SectionTitle('Genres'),
         SizedBox(
-          height: 80,
+          height: 66,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 40),
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: kAllGenres.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 20),
-            itemBuilder: (context, i) {
-              final g = kAllGenres[i];
+            separatorBuilder: (BuildContext _, int __) => const SizedBox(width: 10),
+            itemBuilder: (BuildContext _, int i) {
+              final GenreDef g = kAllGenres[i];
               return StatefulBuilder(
                 builder: (context, setState) {
                   bool isFocused = false;
                   return Focus(
                     onFocusChange: (focused) => setState(() => isFocused = focused),
-                    child: InkWell(
+                    child: GestureDetector(
                       onTap: () => openGenre(context, g),
-                      borderRadius: BorderRadius.circular(16),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 150),
-                        width: 150,
-                        alignment: Alignment.center,
+                        width: 112,
+                        clipBehavior: Clip.antiAlias,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(colors: [g.c1, g.c2]),
-                          border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 3),
-                          boxShadow: isFocused ? [const BoxShadow(color: Colors.white54, blurRadius: 10)] : [],
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: <Color>[g.c1, g.c2],
+                          ),
+                          border: Border.all(color: isFocused ? Colors.white : Colors.white12, width: isFocused ? 2 : 1),
+                          boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 8)] : [],
                         ),
-                        child: Text(g.label, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                  );
-                }
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 30),
-      ],
-    );
-  }
-}
-
-// ───────────────────────── TV Custom Widgets ─────────────────────────
-
-class TVPosterRow extends StatefulWidget {
-  final String title;
-  final Future<List<TmdbItem>> Function() loader;
-  final bool ranked;
-
-  const TVPosterRow({super.key, required this.title, required this.loader, this.ranked = false});
-
-  @override
-  State<TVPosterRow> createState() => _TVPosterRowState();
-}
-
-class _TVPosterRowState extends State<TVPosterRow> {
-  late Future<List<TmdbItem>> _f;
-
-  @override
-  void initState() {
-    super.initState();
-    _f = widget.loader();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<TmdbItem>>(
-      future: _f,
-      builder: (context, snap) {
-        final items = snap.data ?? [];
-        if (snap.connectionState == ConnectionState.done && items.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 40, bottom: 15),
-              child: Text(widget.title, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
-            SizedBox(
-              height: 250, // Fixed height for TV posters
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                itemCount: snap.connectionState != ConnectionState.done ? 6 : items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 20),
-                itemBuilder: (context, i) {
-                  if (snap.connectionState != ConnectionState.done) {
-                    return ShimmerBox(w: 150, h: 225, r: 12);
-                  }
-                  return TVPosterCard(item: items[i], rank: widget.ranked ? i + 1 : null);
-                },
-              ),
-            ),
-            const SizedBox(height: 30),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class TVPosterCard extends StatelessWidget {
-  final TmdbItem item;
-  final int? rank;
-  final double? progress;
-  final VoidCallback? onLongPress;
-
-  const TVPosterCard({super.key, required this.item, this.rank, this.progress, this.onLongPress});
-
-  @override
-  Widget build(BuildContext context) {
-    return StatefulBuilder(
-      builder: (context, setState) {
-        bool isFocused = false;
-        return Focus(
-          onFocusChange: (focused) => setState(() => isFocused = focused),
-          child: InkWell(
-            onTap: () => Hooks.open(context, item),
-            onLongPress: onLongPress,
-            borderRadius: BorderRadius.circular(12),
-            child: AnimatedScale(
-              scale: isFocused ? 1.05 : 1.0, // Scale up on D-pad focus
-              duration: const Duration(milliseconds: 150),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                width: 150,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 3),
-                  boxShadow: isFocused ? [const BoxShadow(color: Colors.white24, blurRadius: 15, spreadRadius: 2)] : [],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(9), // Inner radius
                         child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            PosterImage(item: item, width: 150),
-                            if (rank != null)
-                              Positioned(
-                                left: -5,
-                                bottom: -5,
-                                child: RankNumber(rank!, size: 100),
+                          children: <Widget>[
+                            Positioned(
+                              right: -8,
+                              bottom: -8,
+                              child: Icon(g.icon, size: 52, color: alpha(Colors.white, 0.18)),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 0),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  g.label,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.15,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
-                            if (progress != null)
-                              Positioned(
-                                bottom: 0,
-                                left: 0,
-                                right: 0,
-                                child: LinearProgressIndicator(value: progress, backgroundColor: Colors.black54, valueColor: const AlwaysStoppedAnimation<Color>(HC.accent2)),
-                              )
+                            ),
                           ],
                         ),
                       ),
                     ),
-                    if (isFocused) // Only show title text when focused to keep TV UI clean
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8, left: 4, right: 4),
-                        child: Text(
-                          item.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                        ),
-                      )
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      }
-    );
-  }
-}
-
-class TVHeroCarousel extends StatefulWidget {
-  final List<TmdbItem> items;
-  const TVHeroCarousel({super.key, required this.items});
-
-  @override
-  State<TVHeroCarousel> createState() => _TVHeroCarouselState();
-}
-
-class _TVHeroCarouselState extends State<TVHeroCarousel> {
-  late PageController _pageController;
-  int _currentIndex = 0;
-  Timer? _autoPlayTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _pageController = PageController(viewportFraction: 0.85);
-    _startAutoPlay();
-  }
-
-  void _startAutoPlay() {
-    _autoPlayTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
-      if (_pageController.hasClients) {
-        int nextIndex = (_currentIndex + 1) % widget.items.length;
-        _pageController.animateToPage(nextIndex, duration: const Duration(milliseconds: 800), curve: Curves.easeInOut);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    _autoPlayTimer?.cancel();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 350,
-      child: PageView.builder(
-        controller: _pageController,
-        onPageChanged: (index) => setState(() => _currentIndex = index),
-        itemCount: widget.items.length,
-        itemBuilder: (context, index) {
-          final item = widget.items[index];
-          final bool isActive = _currentIndex == index;
-          
-          return StatefulBuilder(
-            builder: (context, setStateFocus) {
-              bool isFocused = false;
-              return Focus(
-                onFocusChange: (focused) {
-                   setStateFocus(() => isFocused = focused);
-                   if(focused && !isActive && _pageController.hasClients){
-                      _pageController.animateToPage(index, duration: const Duration(milliseconds: 300), curve: Curves.ease);
-                   }
-                },
-                child: AnimatedScale(
-                  scale: isActive ? (isFocused ? 1.05 : 1.0) : 0.9,
-                  duration: const Duration(milliseconds: 300),
-                  child: GestureDetector(
-                    onTap: () => Hooks.open(context, item),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: 4),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 20)],
-                        image: DecorationImage(
-                          image: CachedNetworkImageProvider(item.backdropUrl('w1280')),
-                          fit: BoxFit.cover,
-                        )
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(
-                            begin: Alignment.bottomCenter,
-                            end: Alignment.topCenter,
-                            colors: [Colors.black.withOpacity(0.9), Colors.transparent],
-                          )
-                        ),
-                        padding: const EdgeInsets.all(30),
-                        alignment: Alignment.bottomLeft,
-                        child: Text(
-                          item.title,
-                          style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black, blurRadius: 10)]),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                  );
+                }
               );
-            }
-          );
-        },
-      ),
-    );
-  }
-}
-
-class TVGenreBlock extends StatelessWidget {
-  final GenreDef g;
-  final VoidCallback onSeeAll;
-
-  const TVGenreBlock({super.key, required this.g, required this.onSeeAll});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 40, top: 20, bottom: 10),
-          child: Text(g.label, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
+            },
+          ),
         ),
-        TVPosterRow(title: 'Movies', loader: () => Tmdb.I.genreRow(g, RowKind.movie)),
-        TVPosterRow(title: 'Series', loader: () => Tmdb.I.genreRow(g, RowKind.series)),
+        const SizedBox(height: 20),
       ],
     );
   }

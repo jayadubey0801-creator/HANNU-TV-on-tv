@@ -120,7 +120,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   
   // 🔥 TV SPECIFIC VARIABLES 🔥
   bool isTvDevice = false;
-  bool _isTvFullScreen = false; // TV me fullscreen track karne ke liye
+  bool _isTvFullScreen = false; // Tracks if TV player is in full screen mode
+  bool _isTvDescExpanded = false; // Tracks if description is open on TV
 
   int totalSeasons = 1;
   List episodesList = [];
@@ -195,9 +196,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         isTvDevice = size.width > size.height && size.width > 600; 
         if (isTvDevice) {
           isFullScreen = true; 
-          _isTvFullScreen = false; // TV me shuru me chhoti screen hogi (Split layout)
-        }
-        else { 
+          _isTvFullScreen = false; // TV starts in split screen
+        } else { 
           SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); 
           SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge); 
         }
@@ -221,27 +221,38 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     _introAnimController.forward().then((_) { if (mounted) setState(() => showIntroAnimation = false); });
   }
 
+  // 🔥 DEEP FETCH FOR TV: 100+ Movies from multiple TMDB endpoints 🔥
   Future<void> _fetchSimilarMovies() async {
     setState(() => isLoadingSimilar = true);
     try {
       final type = widget.mediaType == 'tv' || widget.mediaType == 'series' ? 'tv' : 'movie';
-      final res = await http.get(Uri.parse('https://api.themoviedb.org/3/$type/${widget.tmdbId}/recommendations?language=en-US'), headers: kApiHeaders);
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        final List results = data['results'] ?? [];
-        if (mounted) {
-          setState(() {
-            similarMovies = results.map((m) => {
-              'id': m['id'], 'title': m['title'] ?? m['name'] ?? 'Unknown',
-              'posterUrl': m['poster_path'] != null ? 'https://image.tmdb.org/t/p/w500${m['poster_path']}' : '',
-              'rating': (m['vote_average'] ?? 0).toStringAsFixed(1),
-              'year': (m['release_date'] ?? m['first_air_date'] ?? '').toString().split('-').first,
-              'mediaType': type,
-            }).toList();
-            isLoadingSimilar = false;
-          });
-        }
-      } else { if (mounted) setState(() => isLoadingSimilar = false); }
+      
+      final res1 = await http.get(Uri.parse('https://api.themoviedb.org/3/$type/${widget.tmdbId}/recommendations?language=en-US&page=1'), headers: kApiHeaders);
+      final res2 = await http.get(Uri.parse('https://api.themoviedb.org/3/$type/${widget.tmdbId}/similar?language=en-US&page=1'), headers: kApiHeaders);
+      final res3 = await http.get(Uri.parse('https://api.themoviedb.org/3/$type/${widget.tmdbId}/similar?language=en-US&page=2'), headers: kApiHeaders);
+      
+      List results = [];
+      if (res1.statusCode == 200) results.addAll(json.decode(res1.body)['results'] ?? []);
+      if (res2.statusCode == 200) results.addAll(json.decode(res2.body)['results'] ?? []);
+      if (res3.statusCode == 200) results.addAll(json.decode(res3.body)['results'] ?? []);
+
+      final Map<int, dynamic> uniqueResults = {};
+      for(var m in results) {
+          if (m['id'] != null) uniqueResults[m['id']] = m;
+      }
+
+      if (mounted) {
+        setState(() {
+          similarMovies = uniqueResults.values.map((m) => {
+            'id': m['id'], 'title': m['title'] ?? m['name'] ?? 'Unknown',
+            'posterUrl': m['poster_path'] != null ? 'https://image.tmdb.org/t/p/w500${m['poster_path']}' : '',
+            'rating': (m['vote_average'] ?? 0).toStringAsFixed(1),
+            'year': (m['release_date'] ?? m['first_air_date'] ?? '').toString().split('-').first,
+            'mediaType': type,
+          }).toList();
+          isLoadingSimilar = false;
+        });
+      }
     } catch (_) { if (mounted) setState(() => isLoadingSimilar = false); }
   }
 
@@ -344,7 +355,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
           onNavigationRequest: (NavigationRequest request) {
             final url = request.url.toLowerCase();
             
-            // 🔥 DEEP AD-BLOCKER: Koi bhi Ad ya Google ka link khulne nahi dega 🔥
             if (url.contains('google.com') || 
                 url.contains('doubleclick') || 
                 url.contains('popads') || 
@@ -360,7 +370,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 return NavigationDecision.prevent;
             }
 
-            // 🔥 SCREEN TOUCH SHIELD 🔥
             if (request.isMainFrame) {
               if (!url.contains('pantyflix') && !url.contains('vercel.app')) {
                 return NavigationDecision.prevent;
@@ -1229,7 +1238,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       );
     }
 
-    // SPLIT SCREEN LAYOUT (As per sketch)
+    // 📺 SPLIT SCREEN LAYOUT (Tere red, green, pink sketch ke hisaab se) 📺
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F0F),
       body: Row(
@@ -1251,7 +1260,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                       Positioned(
                         top: 15, right: 20,
                         child: _buildFocusableItem(
-                          onTap: () => setState(() => _isTvFullScreen = true), // Full Screen hoga
+                          onTap: () => setState(() => _isTvFullScreen = true), // Click se Full Screen hoga
                           borderRadius: BorderRadius.circular(12),
                           child: Opacity(opacity: 0.9, child: Image.asset('assets/logo.png', height: 40)),
                         ),
@@ -1276,7 +1285,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                           ],
                         ),
                         const SizedBox(height: 16),
-                        // Search & Watchlist
+                        // 💗 Pink: Search & Watchlist
                         Row(
                           children: [
                             _buildFocusableItem(
@@ -1293,7 +1302,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                           ],
                         ),
                         const SizedBox(height: 20),
-                        // Servers List
+                        // 🟢 Green: Servers List
                         const Text("Available Servers", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 10),
                         SingleChildScrollView(
@@ -1314,8 +1323,32 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                           ),
                         ),
                         const SizedBox(height: 20),
-                        // Description Text
-                        Text(widget.overview.isNotEmpty ? widget.overview : (details?['overview'] ?? 'Loading description...'), style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5)),
+                        // 🟢 Green Top: Collapsible Description (By Default Hide Rahegi)
+                        _buildFocusableItem(
+                          onTap: () => setState(() => _isTvDescExpanded = !_isTvDescExpanded),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(color: Colors.grey[900], borderRadius: BorderRadius.circular(12)),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text("Story / Description", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Icon(_isTvDescExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, color: Colors.white),
+                                  ],
+                                ),
+                                if (_isTvDescExpanded) ...[
+                                  const SizedBox(height: 10),
+                                  Text(widget.overview.isNotEmpty ? widget.overview : (details?['overview'] ?? 'Loading description...'), style: const TextStyle(color: Colors.white70, fontSize: 15, height: 1.5)),
+                                ]
+                              ]
+                            )
+                          )
+                        ),
+                        const SizedBox(height: 30),
                       ],
                     ),
                   ),
@@ -1323,7 +1356,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               ],
             ),
           ),
-          // 🔴 RED AREA: Suggested Movies
+          // 🔴 RED AREA: 100 Suggested Movies List
           Container(width: 2, color: Colors.white10), 
           Expanded(
             flex: 3,
@@ -1752,12 +1785,13 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       }
     }
 
-    // 📺 YAHAN REMOTE / BACK BUTTON HANDLER HAI 📺
+    // 📺 YAHAN TV REMOTE KA BACK BUTTON LOGIC HAI 📺
+    // Jab player TV par full screen mein ho, back dabane se app band nahi hoga, split screen hoga.
     return PopScope(
       canPop: !(isTvDevice && _isTvFullScreen),
       onPopInvokedWithResult: (didPop, result) {
         if (isTvDevice && _isTvFullScreen) {
-          setState(() { _isTvFullScreen = false; }); // Remote ka back dabane se video chhoti hogi, page back nahi hoga.
+          setState(() { _isTvFullScreen = false; });
         }
       },
       child: pageContent,
@@ -2467,7 +2501,6 @@ class _ActorSheetState extends State<_ActorSheet> {
   }
 }
 
-// Do ungli se zoom: movie ko box/screen me bhar deta hai (kali patti hat jaati hai). Pinch-in se wapas normal.
 class _PinchZoom extends StatefulWidget {
   final ValueNotifier<double> zoom;
   final Widget child;

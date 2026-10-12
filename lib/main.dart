@@ -188,7 +188,6 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// 🔥 DEEP LIVE TV PARSING WITH COUNTRY AND EXACT CATEGORIES 🔥
 class LiveTvScreen extends StatefulWidget {
   const LiveTvScreen({super.key});
   @override
@@ -238,7 +237,6 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
         for (String line in lines) {
           line = line.trim();
           if (line.startsWith('#EXTINF:')) {
-            // 🔥 FIXED REGEX TO AVOID DART SYNTAX ERRORS 🔥
             final logoMatch = RegExp(r'tvg-logo="([^"]*)"', caseSensitive: false).firstMatch(line);
             currentLogo = logoMatch != null ? (logoMatch.group(1) ?? '') : '';
 
@@ -280,7 +278,6 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
                 'country': currentCountry,
               });
             }
-            // Reset for next
             currentName = '';
             currentLogo = '';
             currentGroup = 'Uncategorized';
@@ -356,16 +353,30 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
                 itemCount: availableCountries.length,
                 itemBuilder: (ctx, idx) {
                   final c = availableCountries[idx];
-                  return ListTile(
-                    title: Text(c, style: const TextStyle(color: Colors.white)),
-                    trailing: selectedCountry == c ? const Icon(Icons.check, color: Colors.redAccent) : null,
-                    onTap: () {
-                      setState(() {
-                        selectedCountry = c;
-                        selectedCategory = 'All'; 
-                      });
-                      _applyFilters();
-                      Navigator.pop(context);
+                  return StatefulBuilder(
+                    builder: (context, setStateFocus) {
+                      bool isFocused = false;
+                      return Focus(
+                        onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                        child: InkWell(
+                          onTap: () {
+                            setState(() {
+                              selectedCountry = c;
+                              selectedCategory = 'All'; 
+                            });
+                            _applyFilters();
+                            Navigator.pop(context);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 150),
+                            color: isFocused ? Colors.white24 : Colors.transparent,
+                            child: ListTile(
+                              title: Text(c, style: const TextStyle(color: Colors.white)),
+                              trailing: selectedCountry == c ? const Icon(Icons.check, color: Colors.redAccent) : null,
+                            ),
+                          ),
+                        ),
+                      );
                     }
                   );
                 }
@@ -398,17 +409,26 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
               )
             : const Text('Live TV', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
         actions: [
-          IconButton(
-            icon: Icon(isSearching ? Icons.close : Icons.search_rounded),
-            onPressed: () {
-              setState(() {
-                isSearching = !isSearching;
-                if (!isSearching) {
-                  searchController.clear();
-                  _applyFilters();
-                }
-              });
-            },
+          StatefulBuilder(
+            builder: (context, setState) {
+              bool isFocused = false;
+              return Focus(
+                onFocusChange: (focused) => setState(() => isFocused = focused),
+                child: IconButton(
+                  icon: Icon(isSearching ? Icons.close : Icons.search_rounded),
+                  color: isFocused ? Colors.redAccent : Colors.white,
+                  onPressed: () {
+                    setState(() {
+                      isSearching = !isSearching;
+                      if (!isSearching) {
+                        searchController.clear();
+                        _applyFilters();
+                      }
+                    });
+                  },
+                ),
+              );
+            }
           )
         ],
       ),
@@ -416,27 +436,36 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.all(12.0),
-            child: InkWell(
-              onTap: _showCountryPicker,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white24)
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.public, color: Colors.redAccent),
-                    const SizedBox(width: 10),
-                    Text("Choose Your Country : $selectedCountry", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                    const Icon(Icons.arrow_drop_down, color: Colors.white54),
-                  ],
-                ),
-              ),
+            child: StatefulBuilder(
+              builder: (context, setStateFocus) {
+                bool isFocused = false;
+                return Focus(
+                  onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                  child: InkWell(
+                    onTap: _showCountryPicker,
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      decoration: BoxDecoration(
+                        color: isFocused ? Colors.white24 : Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isFocused ? Colors.white : Colors.white24, width: isFocused ? 2 : 1)
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.public, color: Colors.redAccent),
+                          const SizedBox(width: 10),
+                          Text("Choose Your Country : $selectedCountry", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                          const Icon(Icons.arrow_drop_down, color: Colors.white54),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
             ),
           ),
           if (categories.length > 1)
@@ -450,19 +479,32 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
                   final isSelected = selectedCategory == categories[index];
                   return Padding(
                     padding: const EdgeInsets.only(right: 8.0),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          selectedCategory = categories[index];
-                        });
-                        _applyFilters();
-                      },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(color: isSelected ? Colors.white : Colors.grey[900], borderRadius: BorderRadius.circular(20)),
-                        child: Center(child: Text(categories[index], style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
-                      ),
+                    child: StatefulBuilder(
+                      builder: (context, setStateFocus) {
+                        bool isFocused = false;
+                        return Focus(
+                          onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                          child: InkWell(
+                            onTap: () {
+                              setState(() {
+                                selectedCategory = categories[index];
+                              });
+                              _applyFilters();
+                            },
+                            borderRadius: BorderRadius.circular(20),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 150),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? Colors.white : (isFocused ? Colors.white24 : Colors.grey[900]), 
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: isFocused ? 2 : 0)
+                              ),
+                              child: Center(child: Text(categories[index], style: TextStyle(color: isSelected ? Colors.black : Colors.white, fontWeight: FontWeight.bold, fontSize: 12))),
+                            ),
+                          ),
+                        );
+                      }
                     ),
                   );
                 },
@@ -484,21 +526,35 @@ class _LiveTvScreenState extends State<LiveTvScreen> {
                       final String logo = channel['logo'] ?? '';
                       final String url = channel['url'] ?? '';
 
-                      return InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: url.isEmpty ? null : () {
-                          Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SkippableAdScreen(adDuration: 30, nextScreen: VideoPlayerPage(tmdbId: 0, mediaType: 'tv', season: 1, episode: 1, movieTitle: name, overview: 'Live TV Broadcast', rating: 'Live', year: 'Now', customUrl: url))));
-                        },
-                        child: Container(
-                          decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white12)),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: <Widget>[
-                              Expanded(child: Padding(padding: const EdgeInsets.all(8), child: logo.isNotEmpty ? CachedNetworkImage(imageUrl: logo, fit: BoxFit.contain, errorWidget: (_, __, ___) => const Icon(Icons.tv, color: Colors.white54, size: 40)) : const Icon(Icons.tv, color: Colors.white54, size: 40))),
-                              Container(width: double.infinity, padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.vertical(bottom: Radius.circular(12))), child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center)),
-                            ],
-                          ),
-                        ),
+                      return StatefulBuilder(
+                        builder: (context, setStateFocus) {
+                          bool isFocused = false;
+                          return Focus(
+                            onFocusChange: (focused) => setStateFocus(() => isFocused = focused),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: url.isEmpty ? null : () {
+                                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => SkippableAdScreen(adDuration: 30, nextScreen: VideoPlayerPage(tmdbId: 0, mediaType: 'tv', season: 1, episode: 1, movieTitle: name, overview: 'Live TV Broadcast', rating: 'Live', year: 'Now', customUrl: url))));
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1A1A1A), 
+                                  borderRadius: BorderRadius.circular(12), 
+                                  border: Border.all(color: isFocused ? Colors.redAccent : Colors.white12, width: isFocused ? 3 : 1),
+                                  boxShadow: isFocused ? [const BoxShadow(color: Colors.redAccent, blurRadius: 10)] : [],
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: <Widget>[
+                                    Expanded(child: Padding(padding: const EdgeInsets.all(8), child: logo.isNotEmpty ? CachedNetworkImage(imageUrl: logo, fit: BoxFit.contain, errorWidget: (_, __, ___) => const Icon(Icons.tv, color: Colors.white54, size: 40)) : const Icon(Icons.tv, color: Colors.white54, size: 40))),
+                                    Container(width: double.infinity, padding: const EdgeInsets.all(8), decoration: const BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.vertical(bottom: Radius.circular(12))), child: Text(name, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.center)),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                       );
                     },
                   ),
