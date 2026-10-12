@@ -90,7 +90,6 @@ class PosterImage extends StatelessWidget {
   }
 }
 
-// 🔥 DEEP FIX: SMALLER & 100% TRANSPARENT NUMBER 🔥
 class RankNumber extends StatelessWidget {
   const RankNumber(this.n, {super.key, this.size = 56});
   final int n;
@@ -100,11 +99,10 @@ class RankNumber extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: <Widget>[
-        // Stroke (Bahar ki thin safed outline)
         Text(
           '$n',
           style: TextStyle(
-            fontSize: size * 0.85, // Size chhota kar diya
+            fontSize: size * 0.85, 
             fontWeight: FontWeight.w900,
             fontStyle: FontStyle.italic,
             height: 1.0,
@@ -118,17 +116,15 @@ class RankNumber extends StatelessWidget {
             ],
           ),
         ),
-        // Ander ka fill ekdum transparent kar diya (0.05 opacity)
-        // isse poster ka apna asli color apne aap number me jhalakega!
         Text(
           '$n',
           style: TextStyle(
-            fontSize: size * 0.85, // Same reduced size
+            fontSize: size * 0.85, 
             fontWeight: FontWeight.w900,
             fontStyle: FontStyle.italic,
             height: 1.0,
             letterSpacing: -3,
-            color: Colors.white.withOpacity(0.05), // Extremely transparent
+            color: Colors.white.withOpacity(0.05),
           ),
         ),
       ],
@@ -136,6 +132,7 @@ class RankNumber extends StatelessWidget {
   }
 }
 
+// 🔥 DEEP FOCUS LOGIC ADDED HERE (For White Glow) 🔥
 class PosterCard extends StatelessWidget {
   const PosterCard({
     super.key,
@@ -158,103 +155,126 @@ class PosterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap ?? () => Hooks.open(context, item),
-      onLongPress: onLongPress,
-      child: SizedBox(
-        width: width + (rank != null ? 22 : 0), 
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            SizedBox(
-              width: width + (rank != null ? 22 : 0),
-              height: width * 1.5,
-              child: Stack(
-                clipBehavior: Clip.none,
-                children: <Widget>[
-                  Positioned(
-                    right: 0,
-                    child: PosterImage(item: item, width: width),
+    return StatefulBuilder(
+      builder: (context, setStateFocus) {
+        bool isFocused = false;
+        return Focus(
+          onFocusChange: (focused) {
+            setStateFocus(() => isFocused = focused);
+            if (focused) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
+          },
+          child: InkWell(
+            onTap: onTap ?? () => Hooks.open(context, item),
+            onLongPress: onLongPress,
+            borderRadius: BorderRadius.circular(12),
+            child: AnimatedScale(
+              scale: isFocused ? 1.08 : 1.0, 
+              duration: const Duration(milliseconds: 150),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  // 🔥 WHITE BORDER AND GLOW 🔥
+                  border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: isFocused ? 3.0 : 0),
+                  boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 3)] : [],
+                ),
+                child: SizedBox(
+                  width: width + (rank != null ? 22 : 0), 
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      SizedBox(
+                        width: width + (rank != null ? 22 : 0),
+                        height: width * 1.5,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: <Widget>[
+                            Positioned(
+                              right: 0,
+                              child: PosterImage(item: item, width: width),
+                            ),
+                            if (rank != null)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  width: width,
+                                  height: width * 0.75,
+                                  decoration: BoxDecoration(
+                                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: <Color>[Colors.transparent, Colors.black.withOpacity(0.8)],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            if (rank != null)
+                              Positioned(
+                                left: -8,
+                                bottom: -8,
+                                child: RankNumber(rank!, size: width * 0.8)
+                              ),
+                            if (badge != null)
+                              Positioned(
+                                top: 6,
+                                right: 6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(badge!,
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
+                                ),
+                              ),
+                            if (progress != null)
+                              Positioned(
+                                left: (rank != null ? 30 : 8),
+                                right: 8,
+                                bottom: 8,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(3),
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    minHeight: 4,
+                                    backgroundColor: Colors.white24,
+                                    valueColor: const AlwaysStoppedAnimation<Color>(HC.accent2),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(top: 6, left: (rank != null ? 28 : 0)),
+                        child: Text(
+                          item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(left: (rank != null ? 28 : 0)),
+                        child: Text(
+                          item.rating > 0 ? '★ ${item.rating.toStringAsFixed(1)}   ${item.year}' : item.year,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 11, color: HC.dim),
+                        ),
+                      ),
+                    ],
                   ),
-                  if (rank != null)
-                    Positioned(
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        width: width,
-                        height: width * 0.75,
-                        decoration: BoxDecoration(
-                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: <Color>[Colors.transparent, Colors.black.withOpacity(0.8)],
-                          ),
-                        ),
-                      ),
-                    ),
-                  // 🔥 NUMBER AT BOTTOM LEFT OVERLAPPING THE POSTER 🔥
-                  if (rank != null)
-                    Positioned(
-                      left: -8,
-                      bottom: -8,
-                      child: RankNumber(rank!, size: width * 0.8)
-                    ),
-                  if (badge != null)
-                    Positioned(
-                      top: 6,
-                      right: 6,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(badge!,
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
-                      ),
-                    ),
-                  if (progress != null)
-                    Positioned(
-                      left: (rank != null ? 30 : 8),
-                      right: 8,
-                      bottom: 8,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: progress,
-                          minHeight: 4,
-                          backgroundColor: Colors.white24,
-                          valueColor: const AlwaysStoppedAnimation<Color>(HC.accent2),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
-            Padding(
-              padding: EdgeInsets.only(top: 6, left: (rank != null ? 28 : 0)),
-              child: Text(
-                item.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white),
-              ),
-            ),
-            Padding(
-              padding: EdgeInsets.only(left: (rank != null ? 28 : 0)),
-              child: Text(
-                item.rating > 0 ? '★ ${item.rating.toStringAsFixed(1)}   ${item.year}' : item.year,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: HC.dim),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      }
     );
   }
 }
@@ -493,17 +513,34 @@ class OttLogo extends StatelessWidget {
             placeholder: (BuildContext _, String __) => _spinner(),
             errorWidget: (BuildContext _, String __, Object ___) => _fallback(),
           );
-    return Container(
-      width: w,
-      height: h,
-      clipBehavior: Clip.antiAlias,
-      padding: ott.fit == BoxFit.contain ? const EdgeInsets.all(8) : EdgeInsets.zero,
-      decoration: BoxDecoration(
-        color: ott.tileBg,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white12),
-      ),
-      child: img,
+    return StatefulBuilder(
+      builder: (context, setStateFocus) {
+        bool isFocused = false;
+        return Focus(
+          onFocusChange: (focused) {
+            setStateFocus(() => isFocused = focused);
+            if (focused) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
+          },
+          child: AnimatedScale(
+            scale: isFocused ? 1.1 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: w,
+              height: h,
+              clipBehavior: Clip.antiAlias,
+              padding: ott.fit == BoxFit.contain ? const EdgeInsets.all(8) : EdgeInsets.zero,
+              decoration: BoxDecoration(
+                color: ott.tileBg,
+                borderRadius: BorderRadius.circular(radius),
+                border: Border.all(color: isFocused ? Colors.white : Colors.white12, width: isFocused ? 3 : 1),
+                boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 3)] : [],
+              ),
+              child: img,
+            ),
+          ),
+        );
+      }
     );
   }
 }
@@ -557,28 +594,46 @@ class GenreBlock extends StatelessWidget {
       children: <Widget>[
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-          child: GestureDetector(
-            onTap: onSeeAll,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                gradient: LinearGradient(colors: <Color>[g.c1, g.c2]),
-              ),
-              child: Row(
-                children: <Widget>[
-                  Icon(g.icon, color: Colors.white, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(g.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
+          child: StatefulBuilder(
+            builder: (context, setStateFocus) {
+              bool isFocused = false;
+              return Focus(
+                onFocusChange: (focused) {
+                  setStateFocus(() => isFocused = focused);
+                  if (focused) Scrollable.ensureVisible(context, alignment: 0.5, duration: const Duration(milliseconds: 250));
+                },
+                child: GestureDetector(
+                  onTap: onSeeAll,
+                  child: AnimatedScale(
+                    scale: isFocused ? 1.05 : 1.0,
+                    duration: const Duration(milliseconds: 150),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        gradient: LinearGradient(colors: <Color>[g.c1, g.c2]),
+                        border: Border.all(color: isFocused ? Colors.white : Colors.transparent, width: isFocused ? 3 : 0),
+                        boxShadow: isFocused ? [const BoxShadow(color: Colors.white, blurRadius: 15, spreadRadius: 3)] : [],
+                      ),
+                      child: Row(
+                        children: <Widget>[
+                          Icon(g.icon, color: Colors.white, size: 22),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(g.label,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white)),
+                          ),
+                          if (onSeeAll != null) const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+                        ],
+                      ),
+                    ),
                   ),
-                  if (onSeeAll != null) const Icon(Icons.chevron_right_rounded, color: Colors.white70),
-                ],
-              ),
-            ),
+                ),
+              );
+            }
           ),
         ),
         PosterRow(

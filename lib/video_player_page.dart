@@ -277,76 +277,56 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               if (mounted) setState(() => isPageLoading = false);
             });
 
-            // 🔥 DEEP FIX: BLACK SCREEN & CAPTCHA RESOLVED 🔥
+            // 🔥 DEEP FIX: CLIENT-SIDE CRASH OVERLAY TRICK 🔥
+            // Ab hum website ka koi logic ya tag delete nahi karenge, balki video ko uske upar chipka denge.
             String jsCode = '''
               document.body.style.backgroundColor = '#000000';
-              document.documentElement.style.backgroundColor = '#000000';
               
               var style = document.createElement('style');
               style.innerHTML = `
-                /* We ONLY hide known specific containers, not EVERYTHING to prevent hiding the player */
-                header, nav, footer, .navbar, .logo, .search, form, .menu,
-                .ad-container, .ads, [class*="ad-"], iframe[src*="ads"], iframe[src*="bet"] { 
-                    display: none !important; 
-                }
-                
-                body, html { 
-                    background-color: #000000 !important; 
-                    overflow: hidden !important; 
-                    margin: 0 !important; 
-                    padding: 0 !important; 
-                }
+                /* Hide pure ads, DO NOT HIDE header, nav or divs to prevent Client-Side Exception */
+                .ad-container, .ads, [class*="ad-"], a[target="_blank"] { display: none !important; }
+                body, html { background-color: #000000 !important; overflow: hidden !important; margin: 0 !important; }
               `;
               document.head.appendChild(style);
 
               window.open = function() { return null; };
-              window.alert = function() { return null; };
               
-              document.addEventListener('click', function(e) {
-                  var target = e.target;
-                  if(target.tagName === 'A' || target.closest('a')) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                  }
-              }, true);
-
               setInterval(function() {
-                // Maximizing video tag if it exists
                 var vids = document.getElementsByTagName('video');
+                var targetElement = null;
+
                 if (vids.length > 0) {
-                  var v = vids[0];
-                  v.style.backgroundColor = '#000000';
-                  v.style.objectFit = '$currentAspectRatio';
-                  v.style.position = 'fixed';
-                  v.style.top = '0'; 
-                  v.style.left = '0'; 
-                  v.style.width = '100vw'; 
-                  v.style.height = '100vh'; 
-                  v.style.zIndex = '999999';
-                  
-                  if (v.currentTime > 0.5 && !v.paused) {
-                    VideoState.postMessage('playing');
-                  }
+                  targetElement = vids[0];
                 } else {
-                  // If video tag is hidden inside an iframe, maximize all non-ad iframes
+                  // Video nahi hai? Toh shayad iframe mein chal raha ho (vidcore/rift)
                   var iframes = document.getElementsByTagName('iframe');
                   for(var i=0; i<iframes.length; i++) {
                      var src = iframes[i].src || '';
-                     if(!src.includes('ads') && !src.includes('bet')) {
-                         iframes[i].style.position = 'fixed';
-                         iframes[i].style.top = '0';
-                         iframes[i].style.left = '0';
-                         iframes[i].style.width = '100vw';
-                         iframes[i].style.height = '100vh';
-                         iframes[i].style.zIndex = '99998';
-                         iframes[i].style.backgroundColor = '#000000';
+                     if(!src.includes('ads') && !src.includes('bet') && !src.includes('pop')) {
+                         targetElement = iframes[i];
+                         break;
                      }
                   }
                 }
+
+                // Video ya main iframe ko utha kar screen par sabse aage (999999) kar do
+                if(targetElement) {
+                    targetElement.style.position = 'fixed';
+                    targetElement.style.top = '0';
+                    targetElement.style.left = '0';
+                    targetElement.style.width = '100vw';
+                    targetElement.style.height = '100vh';
+                    targetElement.style.zIndex = '999999';
+                    targetElement.style.backgroundColor = '#000000';
+                    targetElement.style.objectFit = '$currentAspectRatio';
+                }
                 
-                var playBtns = document.querySelectorAll('.vjs-big-play-button, .jw-icon-display, .play-icon, #play-button');
-                if (playBtns.length > 0) {
-                    playBtns[0].click();
+                if (vids.length > 0 && vids[0].currentTime > 0.5 && !vids[0].paused) {
+                  VideoState.postMessage('playing');
+                } else {
+                  var playBtns = document.querySelectorAll('.vjs-big-play-button, .jw-icon-display, .play-icon, #play-button');
+                  if (playBtns.length > 0) playBtns[0].click();
                 }
               }, 500);
             ''';
@@ -362,20 +342,10 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                 url.contains('bet365') || 
                 url.contains('adsterra') ||
                 url.contains('redirect') ||
-                url.contains('onclick') ||
                 url.startsWith('intent://') ||
-                url.startsWith('market://') ||
-                url.startsWith('whatsapp://') ||
                 url.contains('about:blank')) {
                 return NavigationDecision.prevent;
             }
-
-            if (request.isMainFrame) {
-              if (!url.contains('pantyflix') && !url.contains('vercel.app')) {
-                return NavigationDecision.prevent;
-              }
-            }
-
             return NavigationDecision.navigate;
           },
         ),
@@ -1147,7 +1117,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               const SizedBox(height: 10),
               _infoRow('Released', release),
               _infoRow('Runtime', runtime),
-              _infoRow('Languages', languages),
+              _infoRow('Languages', Languages),
               _infoRow('Status', status),
               _infoRow('Rating', ratingStr),
             ],
@@ -1202,7 +1172,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     return _TvFocusButton(onTap: onTap, borderRadius: borderRadius ?? BorderRadius.circular(8), child: child);
   }
 
-  // 📺 ANDROID TV SPLIT-SCREEN LAYOUT (GLOW BACKGROUND ENABLED) 📺
   Widget _buildTVLayout() {
     if (_isTvFullScreen) {
       return Scaffold(
@@ -1221,7 +1190,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
               top: 20, right: 20,
               child: SafeArea(
                 child: _buildFocusableItem(
-                  onTap: () => setState(() => _isTvFullScreen = false), // Wapas Split-Screen me layega
+                  onTap: () => setState(() => _isTvFullScreen = false),
                   borderRadius: BorderRadius.circular(12),
                   child: Opacity(
                     opacity: 0.9,
@@ -1238,22 +1207,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       );
     }
 
-    // 📺 SPLIT SCREEN LAYOUT WITH AMBIENT GLOW 📺
     return Scaffold(
-      backgroundColor: Colors.transparent, // Allow Background Glow to shine!
+      backgroundColor: Colors.transparent,
       body: _AmbientBackground(
         color: _ambientColor,
         child: _AmbientGlow(
           zones: _ambientZones,
           child: Row(
             children: [
-              // 🔵 LEFT SIDE: Video Player (Top), Desc/Servers/Search (Bottom)
               Expanded(
                 flex: 7,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 🔵 Sky Blue area: Video Player
                     SizedBox(
                       width: double.infinity,
                       height: MediaQuery.of(context).size.height * 0.55,
@@ -1264,7 +1230,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                           Positioned(
                             top: 15, right: 20,
                             child: _buildFocusableItem(
-                              onTap: () => setState(() => _isTvFullScreen = true), // Click se Full Screen hoga
+                              onTap: () => setState(() => _isTvFullScreen = true),
                               borderRadius: BorderRadius.circular(12),
                               child: Opacity(opacity: 0.9, child: Image.asset('assets/logo.png', height: 40)),
                             ),
@@ -1272,10 +1238,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                         ],
                       ),
                     ),
-                    // 🟢 / 💗 Green & Pink area: Desc, Servers, Search
                     Expanded(
                       child: Container(
-                        color: Colors.black45, // Transparent black to let glow pass
+                        color: Colors.black45,
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.all(20),
                           child: Column(
@@ -1291,7 +1256,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                                 ],
                               ),
                               const SizedBox(height: 16),
-                              // 💗 Pink: Search & Watchlist
                               Row(
                                 children: [
                                   _buildFocusableItem(
@@ -1308,7 +1272,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                                 ],
                               ),
                               const SizedBox(height: 20),
-                              // 🟢 Green: Servers List
                               const Text("Available Servers", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 10),
                               SingleChildScrollView(
@@ -1329,7 +1292,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                                 ),
                               ),
                               const SizedBox(height: 20),
-                              // 🟢 Green Top: Collapsible Description (By Default Hide Rahegi)
                               _buildFocusableItem(
                                 onTap: () => setState(() => _isTvDescExpanded = !_isTvDescExpanded),
                                 borderRadius: BorderRadius.circular(12),
@@ -1363,12 +1325,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
                   ],
                 ),
               ),
-              // 🔴 RED AREA: 100 Suggested Movies List
               Container(width: 2, color: Colors.white10), 
               Expanded(
                 flex: 3,
                 child: Container(
-                  color: Colors.black45, // Let glow pass
+                  color: Colors.black45,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1444,7 +1405,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (isTvDevice) {
       pageContent = _buildTVLayout();
     } else {
-      // 📱 MOBILE LAYOUT (100% UNTOUCHED) 📱
       if (isFullScreen) {
         pageContent = Scaffold(
           backgroundColor: Colors.black,
@@ -1792,7 +1752,6 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       }
     }
 
-    // 📺 TV REMOTE KA BACK BUTTON LOGIC (PANTYFLIX GAYAB NAHI HOGA)
     return PopScope(
       canPop: !(isTvDevice && _isTvFullScreen),
       onPopInvokedWithResult: (didPop, result) {
@@ -1820,7 +1779,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
   }
 }
 
-// 🔥 DEEP FOCUS LOGIC: Remote se clear select hoga 🔥
+// 🔥 DEEP FOCUS: PURE WHITE GLOW 🔥
 class _TvFocusButton extends StatefulWidget {
   final Widget child;
   final VoidCallback onTap;
@@ -1838,15 +1797,14 @@ class _TvFocusButtonState extends State<_TvFocusButton> {
       child: InkWell(
         onTap: widget.onTap, borderRadius: widget.borderRadius,
         child: AnimatedScale(
-          scale: _hasFocus ? 1.05 : 1.0, // Thoda zoom hoga
+          scale: _hasFocus ? 1.05 : 1.0, 
           duration: const Duration(milliseconds: 150),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             decoration: BoxDecoration(
               borderRadius: widget.borderRadius,
-              // Mota Laal Border aur Glow aayega focus par
-              border: Border.all(color: _hasFocus ? Colors.redAccent : Colors.transparent, width: _hasFocus ? 4.0 : 0),
-              boxShadow: _hasFocus ? [BoxShadow(color: Colors.redAccent.withOpacity(0.8), blurRadius: 15, spreadRadius: 2)] : [],
+              border: Border.all(color: _hasFocus ? Colors.white : Colors.transparent, width: _hasFocus ? 3.0 : 0),
+              boxShadow: _hasFocus ? [BoxShadow(color: Colors.white.withOpacity(0.8), blurRadius: 15, spreadRadius: 2)] : [],
             ),
             child: widget.child,
           ),
